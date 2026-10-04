@@ -2,6 +2,7 @@
   "expo": {
     "name": "DueRadar",
     "slug": "dueradar",
+    "owner": "sumitsingh34",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -11,6 +12,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.sumitsingh34.dueradar",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
