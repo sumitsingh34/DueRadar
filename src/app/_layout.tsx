@@ -1,18 +1,33 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { SQLiteProvider } from 'expo-sqlite';
+import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { DATABASE_NAME, migrateDbIfNeeded } from '@/db/migrations';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+      {/* Children render only after migrations finish. */}
+      <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
+        <HideSplashWhenReady />
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="item/new" options={{ presentation: 'modal', title: 'New item' }} />
+          <Stack.Screen name="item/[id]" options={{ title: 'Edit item' }} />
+        </Stack>
+      </SQLiteProvider>
     </ThemeProvider>
   );
+}
+
+function HideSplashWhenReady() {
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+  return null;
 }

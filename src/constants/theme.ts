@@ -14,6 +14,11 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    tint: '#0D74CE',
+    onTint: '#ffffff',
+    danger: '#CE2C31',
+    warning: '#AB6400',
+    border: '#D9D9E0',
   },
   dark: {
     text: '#ffffff',
@@ -21,6 +26,11 @@ export const Colors = {
     backgroundElement: '#212225',
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
+    tint: '#4CA8F7',
+    onTint: '#000000',
+    danger: '#FF7A7F',
+    warning: '#FFC53D',
+    border: '#363A3F',
   },
 } as const;
 
@@ -62,4 +72,6 @@ export const Spacing = {
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+/** Space for the floating tab bar at the top of the web layout. */
+export const TopTabInset = Platform.select({ web: 72 }) ?? 0;
 export const MaxContentWidth = 800;

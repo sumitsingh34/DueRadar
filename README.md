@@ -1,56 +1,84 @@
-# Welcome to your Expo app 👋
+# DueRadar
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+See what's coming before it's due.
 
-## Get started
+DueRadar is a free, open-source app that makes sure you never miss a renewal, price increase or expiry. It tracks what you pay for again and again (subscriptions, memberships, insurance, phone plans, domains, card annual fees) and the dates that matter.
 
-1. Install dependencies
+**Private by design:** there are no accounts and no server, and nothing to sign up for. Your data is stored in a SQLite database on your own device and never leaves it.
 
-   ```bash
-   npm install
-   ```
+> Status: early development (Week 1 foundation). Not yet in the app stores.
 
-2. Start the app
+## Features
 
-   ```bash
-   npx expo start
-   ```
+Working now:
 
-In the output, you'll find options to open the app in a
+- Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag
+- Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
+- Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
+- Price history: every cost change is recorded (for example $55 → $65 → $80)
+- Light and dark mode. Runs on iOS, Android and the web
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Planned:
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- Reminders scheduled on the device (30, 7 and 1 days before)
+- Quick-add templates for common services
+- Export and import as JSON/CSV for backups
+- Warranties (V2), home and vehicle maintenance (V3), licenses and life admin (V4), and an optional encrypted document vault (V5)
 
-## Get a fresh project
+## Tech stack
 
-When you're ready, run:
+| Area       | Choice                                                      |
+| ---------- | ----------------------------------------------------------- |
+| App        | [Expo](https://expo.dev) (React Native) + TypeScript        |
+| Navigation | Expo Router (file-based), native tabs                       |
+| Storage    | `expo-sqlite` on the device, with versioned migrations      |
+| Tests      | Jest (`jest-expo`) for the date, money and dashboard logic  |
 
-```bash
-npm run reset-project
+## Project structure
+
+```
+src/
+  app/            Screens (Expo Router). Every file is a route.
+    (tabs)/       Overview and All items tabs
+    item/         Add item (modal) and Edit item screens
+  components/     UI building blocks (form controls, item row, date field)
+  db/             SQLite migrations and queries
+  domain/         Pure logic with no React or database: dates, money, schedules, dashboard
+  hooks/          React hooks (theme, data loading)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Data model
 
-### Other setup steps
+Everything you track is an **item** with a key date. One shared table covers the whole roadmap, so later versions add categories and fields, not new apps.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+| Table           | Purpose                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| `items`         | Name, category, cost, schedule (`recurring`, `expiry` or `usage`), due date, status, optional parent item |
+| `price_history` | Each price an item has had, with the date it took effect                                          |
+| `reminders`     | Per-item reminder offsets and their scheduled notification IDs                                    |
+| `attachments`   | Receipts and documents stored in the app's private storage (later versions)                       |
+| `settings`      | App preferences, such as the default currency                                                     |
 
-## Learn more
+Dates are stored as local `YYYY-MM-DD` strings and amounts as integer cents. A repeating date is always computed from the date you entered, so a bill on the 31st comes back to the 31st after a short month instead of drifting to the 28th.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Getting started
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Requirements: Node.js 20+.
 
-## Join the community
+```bash
+npm install
+npm start
+```
 
-Join our community of developers creating universal apps.
+Then scan the QR code with the [Expo Go](https://expo.dev/go) app on your phone, or press `w` to open it in a browser.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+| Command             | What it does          |
+| ------------------- | --------------------- |
+| `npm start`         | Start the dev server  |
+| `npm test`          | Run unit tests        |
+| `npm run typecheck` | TypeScript check      |
+| `npm run lint`      | ESLint                |
+
+## License
+
+[MIT](LICENSE)
