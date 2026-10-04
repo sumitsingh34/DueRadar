@@ -3,20 +3,24 @@ import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/components/form-controls';
 import { ItemRow } from '@/components/item-row';
+import { PriceIncreaseRow } from '@/components/price-increase-row';
 import { Section, TabScreen } from '@/components/tab-screen';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { todayISO } from '@/domain/dates';
+import { findPriceIncreases } from '@/domain/insights';
 import { DEFAULT_CURRENCY, formatMoney } from '@/domain/money';
 import { buildDashboard } from '@/domain/summary';
-import { useItems } from '@/hooks/use-items';
+import { useItems, usePriceHistory } from '@/hooks/use-items';
 import { useSettings } from '@/hooks/use-settings';
 
 const UPCOMING_DAYS = 30;
+const MAX_PRICE_INCREASES = 3;
 
 export default function OverviewScreen() {
   const items = useItems();
+  const history = usePriceHistory();
   const settings = useSettings();
 
   if (items === null) return <ThemedView style={styles.fill} />;
@@ -40,6 +44,7 @@ export default function OverviewScreen() {
   const [primary, ...otherCurrencies] = summary.totals;
   const monthly = primary?.monthlyCents ?? 0;
   const currency = primary?.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
+  const increases = history ? findPriceIncreases(items, history).slice(0, MAX_PRICE_INCREASES) : [];
 
   return (
     <TabScreen title="Overview">
@@ -77,6 +82,14 @@ export default function OverviewScreen() {
           <ThemedText themeColor="textSecondary">Nothing due in the next {UPCOMING_DAYS} days.</ThemedText>
         )}
       </Section>
+
+      {increases.length > 0 ? (
+        <Section title="Price went up">
+          {increases.map((increase) => (
+            <PriceIncreaseRow key={increase.item.id} increase={increase} />
+          ))}
+        </Section>
+      ) : null}
     </TabScreen>
   );
 }

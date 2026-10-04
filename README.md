@@ -1,3 +1,5 @@
+<img src="docs/assets/icon.png" width="96" height="96" alt="DueRadar app icon">
+
 # DueRadar
 
 See what's coming before it's due.
@@ -16,7 +18,8 @@ Working now:
 - Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (40+ common services)
 - Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
 - Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
-- Price history: every cost change is recorded (for example $55 → $65 → $80)
+- Price history: every cost change is recorded (for example $55 → $65 → $80), and the Overview lists the items whose price went up
+- All items: search by name, company, category or notes, with edit and delete on every row
 - Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. A reminder longer than the billing period is skipped
 - Backup: export a JSON backup or a CSV spreadsheet, and restore from a backup on a new phone
 - Your currency for new items (USD, EUR, GBP, INR and more)
@@ -35,7 +38,7 @@ Planned:
 | Storage    | `expo-sqlite` on the device, with versioned migrations      |
 | Reminders  | `expo-notifications`, scheduled locally on the device       |
 | Backup     | `expo-file-system`, `expo-sharing`, `expo-document-picker`  |
-| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates and backups |
+| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search and price insights |
 
 ## Project structure
 
@@ -51,6 +54,8 @@ src/
   hooks/          React hooks (theme, data loading)
   notifications/  Scheduling reminders (a no-op on the web)
   utils/          Dialogs, navigation, saving and opening files
+docs/             Website and privacy policy (GitHub Pages)
+scripts/          Icon generator (make-icons.js)
 ```
 
 ## Data model
@@ -84,6 +89,29 @@ Then scan the QR code with the [Expo Go](https://expo.dev/go) app on your phone,
 | `npm test`          | Run unit tests        |
 | `npm run typecheck` | TypeScript check      |
 | `npm run lint`      | ESLint                |
+
+### Building an Android APK
+
+Builds run on [EAS Build](https://docs.expo.dev/build/introduction/) and need a free Expo account:
+
+```bash
+npx eas-cli@latest build -p android --profile preview
+```
+
+The `preview` profile makes an installable APK. The `production` profile makes an app bundle (.aab) for Google Play.
+
+### Regenerating the icons
+
+The icons are drawn in code. After changing the design in `scripts/make-icons.js`:
+
+```bash
+npm install --no-save sharp
+node scripts/make-icons.js
+```
+
+## Privacy
+
+DueRadar has no accounts, no analytics and no server. See the [privacy policy](docs/privacy.md).
 
 ## License
 

@@ -1,34 +1,13 @@
-import { useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState } from 'react';
+import { listAllPriceHistory, listItems } from '@/db/items';
+import type { Item, PricePoint } from '@/domain/types';
+import { useLiveData } from '@/hooks/use-live-data';
 
-import { onDataChanged } from '@/db/events';
-import { listItems } from '@/db/items';
-import type { Item } from '@/domain/types';
-
-/** All items, reloaded on focus and after any change while focused. Null while loading. */
+/** All items, kept up to date while the screen is focused. Null while loading. */
 export function useItems(): Item[] | null {
-  const db = useSQLiteContext();
-  const [items, setItems] = useState<Item[] | null>(null);
+  return useLiveData(listItems);
+}
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      const load = () => {
-        listItems(db)
-          .then((rows) => {
-            if (active) setItems(rows);
-          })
-          .catch((error) => console.error('Failed to load items', error));
-      };
-      load();
-      const unsubscribe = onDataChanged(load);
-      return () => {
-        active = false;
-        unsubscribe();
-      };
-    }, [db]),
-  );
-
-  return items;
+/** Every item's price history, kept up to date while the screen is focused. */
+export function usePriceHistory(): Omit<PricePoint, 'id'>[] | null {
+  return useLiveData(listAllPriceHistory);
 }
