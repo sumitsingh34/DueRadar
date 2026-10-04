@@ -55,6 +55,7 @@ src/
   notifications/  Scheduling reminders (a no-op on the web)
   utils/          Dialogs, navigation, saving and opening files
 docs/             Website and privacy policy (GitHub Pages)
+fastlane/         Google Play listing text and graphics
 scripts/          Icon generator (make-icons.js)
 ```
 
@@ -102,7 +103,7 @@ The `preview` profile makes an installable APK. The `production` profile makes a
 
 ### Regenerating the icons
 
-The icons are drawn in code. After changing the design in `scripts/make-icons.js`:
+The icons, including the Google Play icon and feature graphic, are drawn in code. After changing the design in `scripts/make-icons.js`:
 
 ```bash
 npm install --no-save sharp

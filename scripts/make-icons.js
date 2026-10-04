@@ -11,6 +11,8 @@ const sharp = require('sharp');
 
 const outDir = process.argv[2] ?? path.join(__dirname, '..', 'assets', 'images');
 const previewDir = process.argv[3] ?? path.join(os.tmpdir(), 'dueradar-icon-preview');
+// Google Play listing graphics, in the folder layout fastlane uses.
+const storeDir = path.join(__dirname, '..', 'fastlane', 'metadata', 'android', 'en-US', 'images');
 const SIZE = 1024;
 const C = SIZE / 2;
 const BLUE_TOP = '#46A7FF';
@@ -85,6 +87,23 @@ const roundedIcon = svg(
     .png()
     .toFile(path.join(outDir, 'notification-icon.png'));
 
+  // Google Play: a 512 x 512 icon (Play adds the rounded corners) and a 1024 x 500 feature graphic.
+  fs.mkdirSync(storeDir, { recursive: true });
+  await sharp(Buffer.from(files['icon.png'])).resize(512, 512).png().toFile(path.join(storeDir, 'icon.png'));
+  const radar = await sharp(Buffer.from(files['splash-icon.png'])).resize(330, 330).png().toBuffer();
+  const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+    ${background}<rect width="1024" height="500" fill="url(#bg)"/>
+    <g font-family="Segoe UI, Roboto, Arial, sans-serif" fill="#ffffff">
+      <text x="460" y="225" font-size="92" font-weight="700">DueRadar</text>
+      <text x="463" y="295" font-size="40" fill-opacity="0.92">See what's coming</text>
+      <text x="463" y="345" font-size="40" fill-opacity="0.92">before it's due.</text>
+    </g>
+  </svg>`;
+  await sharp(Buffer.from(banner))
+    .composite([{ input: radar, left: 75, top: 85 }])
+    .png()
+    .toFile(path.join(storeDir, 'featureGraphic.png'));
+
   // Previews for checking: a launcher-style circle mask and the rounded icon.
   fs.mkdirSync(previewDir, { recursive: true });
   const layers = await sharp(Buffer.from(files['android-icon-background.png']))
@@ -112,5 +131,5 @@ const roundedIcon = svg(
     .resize(128, 128)
     .png()
     .toFile(path.join(previewDir, 'monochrome.png'));
-  console.log(`Icons written to ${outDir}; previews in ${previewDir}`);
+  console.log(`Icons written to ${outDir} and ${storeDir}; previews in ${previewDir}`);
 })();
