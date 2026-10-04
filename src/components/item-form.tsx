@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import type { PickedPhoto } from '@/attachments/pick';
+import { attachmentsSupported } from '@/attachments/storage';
 import { DateField } from '@/components/date-field';
 import {
   Button,
@@ -10,9 +12,11 @@ import {
   SwitchRow,
   TextField,
 } from '@/components/form-controls';
+import { ReceiptField } from '@/components/receipt-field';
 import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { AVAILABLE_CATEGORIES, getCategory, type CategoryId } from '@/domain/categories';
+import { addInterval, todayISO } from '@/domain/dates';
 import {
   DEFAULT_FREQUENCY,
   FREQUENCY_PRESETS,
@@ -39,12 +43,23 @@ const STATUS_OPTIONS = [
 
 const frequencyKey = (f: Frequency) => `${f.unit}:${f.count}`;
 
+/** Warranty length shortcuts; picking one sets the end date from the purchase date. */
+const WARRANTY_YEARS = [1, 2, 3, 5] as const;
+
+/** What happened to the receipt photo while the form was open. */
+export interface ReceiptChange {
+  photo: PickedPhoto | null;
+  changed: boolean;
+}
+
 interface ItemFormProps {
   initial?: ItemInput;
+  /** The item's saved receipt photo, if it has one. */
+  initialReceipt?: PickedPhoto | null;
   /** Currency for a new item. Edits keep the item's own currency. */
   defaultCurrency?: string;
   submitLabel: string;
-  onSubmit: (input: ItemInput) => Promise<void>;
+  onSubmit: (input: ItemInput, receipt: ReceiptChange) => Promise<void>;
   /** Extra content shown above the fields, e.g. renewal status. */
   header?: ReactNode;
   /** Extra content shown below the save button, e.g. a delete button. */
@@ -55,6 +70,7 @@ type Errors = Partial<Record<'name' | 'amount' | 'dueDate', string>>;
 
 export function ItemForm({
   initial,
+  initialReceipt = null,
   defaultCurrency,
   submitLabel,
   onSubmit,
@@ -77,7 +93,15 @@ export function ItemForm({
       ? { unit: initial.intervalUnit, count: initial.intervalCount }
       : DEFAULT_FREQUENCY,
   );
+  const [startDate, setStartDate] = useState<string | null>(initial?.startDate ?? null);
   const [dueDate, setDueDate] = useState<string | null>(initial?.dueDate ?? null);
+  const [warrantyYears, setWarrantyYears] = useState<number | null>(() =>
+    initial?.startDate && initial.dueDate
+      ? (WARRANTY_YEARS.find((y) => addInterval(initial.startDate!, 'year', y) === initial.dueDate) ?? null)
+      : null,
+  );
+  const [receipt, setReceipt] = useState<PickedPhoto | null>(initialReceipt);
+  const [receiptChanged, setReceiptChanged] = useState(false);
   const [autoRenew, setAutoRenew] = useState(initial?.autoRenew ?? true);
   const [status, setStatus] = useState<ItemStatus>(initial?.status ?? 'active');
   const [provider, setProvider] = useState(initial?.provider ?? '');
@@ -86,6 +110,32 @@ export function ItemForm({
   const [saving, setSaving] = useState(false);
 
   const recurring = schedule === 'recurring';
+  const categoryInfo = getCategory(category);
+  const wording = categoryInfo.wording;
+  // A start date (e.g. purchase date) only where the category has a name for it.
+  const showStartDate = !recurring && wording?.startDate != null;
+  const isWarranty = category === 'warranty' && !recurring;
+  const dueDateLabel = recurring ? 'Next renewal date' : (wording?.expires ?? 'Expiry date');
+  const providerLabel = wording?.provider ?? 'Company or store';
+
+  const changeStartDate = (date: string) => {
+    setStartDate(date);
+    if (warrantyYears) setDueDate(addInterval(date, 'year', warrantyYears));
+  };
+  const changeDueDate = (date: string) => {
+    setDueDate(date);
+    setWarrantyYears(null);
+  };
+  const chooseWarrantyYears = (years: number) => {
+    const start = startDate ?? todayISO();
+    setStartDate(start);
+    setWarrantyYears(years);
+    setDueDate(addInterval(start, 'year', years));
+  };
+  const changeReceipt = (photo: PickedPhoto | null) => {
+    setReceipt(photo);
+    setReceiptChanged(true);
+  };
 
   // Keep an unusual saved frequency selectable alongside the presets.
   const frequencyOptions = FREQUENCY_PRESETS.map((p) => ({ value: frequencyKey(p), label: p.label }));
@@ -114,10 +164,15 @@ export function ItemForm({
     if (!template) return;
     setName(template.name);
     setCategory(template.category);
-    setSchedule('recurring');
-    setFrequency(template.frequency);
-    setAutoRenew(true);
     setAppliedTemplate(template.name);
+    if (template.frequency) {
+      setSchedule('recurring');
+      setFrequency(template.frequency);
+      setAutoRenew(true);
+    } else {
+      setSchedule('expiry');
+      chooseWarrantyYears(template.warrantyYears);
+    }
   };
 
   const submit = async () => {
@@ -129,27 +184,38 @@ export function ItemForm({
       if (amountCents == null) next.amount = 'Enter an amount like 15.99.';
     }
     if (!dueDate) {
-      next.dueDate = recurring ? 'Choose the next renewal date.' : 'Choose the expiry date.';
+      next.dueDate = recurring
+        ? 'Choose the next renewal date.'
+        : isWarranty
+          ? 'Choose when the warranty ends.'
+          : 'Choose the expiry date.';
+    } else if (showStartDate && startDate && dueDate < startDate) {
+      next.dueDate = `This is before the ${wording?.startDate?.toLowerCase() ?? 'start date'}.`;
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
     setSaving(true);
     try {
-      await onSubmit({
-        name,
-        category,
-        scheduleType: schedule,
-        amountCents,
-        currency,
-        intervalUnit: recurring ? frequency.unit : null,
-        intervalCount: recurring ? frequency.count : null,
-        dueDate,
-        autoRenew: recurring && autoRenew,
-        status,
-        provider,
-        notes,
-      });
+      await onSubmit(
+        {
+          name,
+          category,
+          scheduleType: schedule,
+          amountCents,
+          currency,
+          intervalUnit: recurring ? frequency.unit : null,
+          intervalCount: recurring ? frequency.count : null,
+          // Hidden fields keep what was saved before.
+          startDate: showStartDate ? startDate : (initial?.startDate ?? null),
+          dueDate,
+          autoRenew: recurring && autoRenew,
+          status,
+          provider,
+          notes,
+        },
+        { photo: receipt, changed: receiptChanged },
+      );
     } finally {
       setSaving(false);
     }
@@ -167,7 +233,7 @@ export function ItemForm({
           <TextField
             value={name}
             onChangeText={setName}
-            placeholder="Netflix, Costco, car insurance…"
+            placeholder="Netflix, Costco, car insurance, laptop…"
             accessibilityLabel="Name"
             autoFocus={!initial}
             returnKeyType="next"
@@ -234,12 +300,32 @@ export function ItemForm({
           </FormField>
         ) : null}
 
-        <FormField label={recurring ? 'Next renewal date' : 'Expiry date'} error={errors.dueDate}>
-          <DateField
-            value={dueDate}
-            onChange={setDueDate}
-            accessibilityLabel={recurring ? 'Next renewal date' : 'Expiry date'}
-          />
+        {showStartDate ? (
+          <FormField label={`${wording?.startDate} (optional)`}>
+            <DateField
+              value={startDate}
+              onChange={changeStartDate}
+              accessibilityLabel={wording?.startDate}
+            />
+          </FormField>
+        ) : null}
+
+        {isWarranty ? (
+          <FormField label="Warranty length">
+            <ChipGroup
+              accessibilityLabel="Warranty length"
+              options={WARRANTY_YEARS.map((y) => ({
+                value: String(y),
+                label: y === 1 ? '1 year' : `${y} years`,
+              }))}
+              value={warrantyYears ? String(warrantyYears) : null}
+              onChange={(value) => chooseWarrantyYears(Number(value))}
+            />
+          </FormField>
+        ) : null}
+
+        <FormField label={dueDateLabel} error={errors.dueDate}>
+          <DateField value={dueDate} onChange={changeDueDate} accessibilityLabel={dueDateLabel} />
         </FormField>
 
         {recurring ? (
@@ -266,14 +352,20 @@ export function ItemForm({
           </FormField>
         ) : null}
 
-        <FormField label="Company or store (optional)">
+        <FormField label={`${providerLabel} (optional)`}>
           <TextField
             value={provider}
             onChangeText={setProvider}
-            placeholder="Who you pay"
-            accessibilityLabel="Company or store"
+            placeholder={isWarranty ? 'Where you bought it' : 'Who you pay'}
+            accessibilityLabel={providerLabel}
           />
         </FormField>
+
+        {categoryInfo.receipts && attachmentsSupported ? (
+          <FormField label="Receipt (optional)">
+            <ReceiptField value={receipt} onChange={changeReceipt} />
+          </FormField>
+        ) : null}
 
         <FormField label="Notes (optional)">
           <TextField

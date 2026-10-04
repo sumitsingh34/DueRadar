@@ -10,9 +10,52 @@ describe('backup round trip', () => {
     ];
     const prices = [{ itemId: 1, amountCents: 1000, currency: 'USD', effectiveDate: '2026-10-01' }];
     const settings = { ...DEFAULT_SETTINGS, currency: 'INR', reminderDays: [7] };
+    const receipts = [
+      {
+        itemId: 1,
+        kind: 'receipt' as const,
+        fileName: '1-1730000000000.jpg',
+        mimeType: 'image/jpeg',
+        createdAt: '2026-10-01T09:00:00.000Z',
+        data: 'aGVsbG8=',
+      },
+    ];
 
-    const backup = createBackup(items, prices, settings, new Date('2026-10-03T12:00:00Z'));
+    const backup = createBackup(items, prices, settings, receipts, new Date('2026-10-03T12:00:00Z'));
     expect(parseBackup(JSON.stringify(backup))).toEqual(backup);
+  });
+
+  it('still reads format 1 backups, which have no receipts', () => {
+    const backup = { app: 'DueRadar', format: 1, items: [makeItem({ id: 1 })] };
+    expect(parseBackup(JSON.stringify(backup)).attachments).toEqual([]);
+  });
+});
+
+describe('backup receipts', () => {
+  const receipt = (overrides: object) => ({
+    itemId: 1,
+    kind: 'receipt',
+    fileName: 'ok.jpg',
+    data: 'aGVsbG8=',
+    ...overrides,
+  });
+
+  it('skips receipts that could write outside the receipts folder or are damaged', () => {
+    const backup = {
+      app: 'DueRadar',
+      format: 2,
+      items: [makeItem({ id: 1 })],
+      attachments: [
+        receipt({ fileName: '../../evil.jpg' }),
+        receipt({ fileName: 'sub/dir.jpg' }),
+        receipt({ fileName: '.hidden' }),
+        receipt({ fileName: 'bad-data.jpg', data: 'not base64!' }),
+        receipt({ fileName: 'orphan.jpg', itemId: 9 }),
+        receipt({ fileName: 'good.jpg' }),
+        receipt({ fileName: 'good.jpg' }),
+      ],
+    };
+    expect(parseBackup(JSON.stringify(backup)).attachments.map((a) => a.fileName)).toEqual(['good.jpg']);
   });
 });
 
@@ -66,10 +109,10 @@ describe('itemsToCsv', () => {
     const [header, row] = csv.replace('﻿', '').split('\r\n');
     expect(csv.startsWith('﻿')).toBe(true);
     expect(header).toBe(
-      'Name,Category,Type,Cost,Currency,Frequency,Next date,Auto-renew,Status,Company,Notes,Monthly cost',
+      'Name,Category,Type,Cost,Currency,Frequency,Next date,Start or purchase date,Auto-renew,Status,Company,Notes,Monthly cost',
     );
     expect(row).toBe(
-      '"Gym, ""Pro""",Subscription,Renews,120.00,USD,Yearly,2026-11-04,Yes,Active,,"Two\nlines",10.00',
+      '"Gym, ""Pro""",Subscription,Renews,120.00,USD,Yearly,2026-11-04,,Yes,Active,,"Two\nlines",10.00',
     );
   });
 });

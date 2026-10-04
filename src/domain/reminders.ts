@@ -1,3 +1,4 @@
+import { getCategory } from './categories';
 import { addInterval, formatDate, fromISODate, nextOccurrenceOnOrAfter, toISODate } from './dates';
 import type { IntervalUnit } from './dates';
 import { formatMoney } from './money';
@@ -82,7 +83,8 @@ function fitsPeriod(item: Item, daysBefore: number): boolean {
 
 function reminderText(item: Item, dueDate: string, daysBefore: number) {
   const when = daysBefore === 0 ? 'today' : daysBefore === 1 ? 'tomorrow' : `in ${daysBefore} days`;
-  const verb = item.scheduleType === 'expiry' ? 'expires' : item.autoRenew ? 'renews' : 'is due';
+  const expires = getCategory(item.category).wording?.expires?.toLowerCase() ?? 'expires';
+  const verb = item.scheduleType === 'expiry' ? expires : item.autoRenew ? 'renews' : 'is due';
   const price = item.amountCents != null ? formatMoney(item.amountCents, item.currency) : null;
   return {
     title: `${item.name} ${verb} ${when}`,

@@ -61,6 +61,18 @@ describe('dueLabel', () => {
     expect(label({ dueDate: '2026-10-02', scheduleType: 'expiry' })).toBe('Expired yesterday');
   });
 
+  it('uses warranty wording for warranties', () => {
+    const label = (overrides: Partial<Item>) =>
+      dueLabel(
+        toDueItem(
+          makeItem({ category: 'warranty', scheduleType: 'expiry', intervalUnit: null, intervalCount: null, ...overrides }),
+          TODAY,
+        )!,
+      );
+    expect(label({ dueDate: '2027-10-03' })).toBe('Warranty ends in 12 months');
+    expect(label({ dueDate: '2026-10-02' })).toBe('Warranty ended yesterday');
+  });
+
   it('uses months and years for dates far away', () => {
     const label = (overrides: Partial<Item>) => dueLabel(toDueItem(makeItem(overrides), TODAY)!);
     expect(label({ dueDate: '2026-12-02', intervalUnit: 'year' })).toBe('Renews in 60 days');

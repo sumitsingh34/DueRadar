@@ -63,6 +63,18 @@ describe('planReminders', () => {
     ]);
   });
 
+  it('words warranty reminders as the warranty ending', () => {
+    const laptop = makeItem({
+      name: 'Laptop',
+      category: 'warranty',
+      scheduleType: 'expiry',
+      intervalUnit: null,
+      intervalCount: null,
+      dueDate: '2026-11-15',
+    });
+    expect(planReminders([laptop], SETTINGS, NOW)[0].title).toBe('Laptop warranty ends in 30 days');
+  });
+
   it('returns nothing when reminders are off', () => {
     expect(planReminders([makeItem({})], { ...SETTINGS, remindersEnabled: false }, NOW)).toEqual([]);
   });

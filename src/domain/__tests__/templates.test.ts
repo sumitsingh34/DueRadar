@@ -31,4 +31,16 @@ describe('templates', () => {
     expect(new Set(TEMPLATES.map((t) => t.name)).size).toBe(TEMPLATES.length);
     expect(POPULAR_TEMPLATES.every(Boolean)).toBe(true);
   });
+
+  it('are either something that renews or a product with a warranty', () => {
+    for (const template of TEMPLATES) {
+      if (template.category === 'warranty') {
+        expect(template.warrantyYears).toBeGreaterThan(0);
+        expect(template.frequency).toBeUndefined();
+      } else {
+        expect(template.frequency).toBeDefined();
+      }
+    }
+    expect(findTemplates('lap')).toEqual([{ name: 'Laptop', category: 'warranty', warrantyYears: 1 }]);
+  });
 });

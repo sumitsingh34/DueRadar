@@ -2,14 +2,13 @@ import type { CategoryId } from './categories';
 import type { Frequency } from './frequency';
 
 /**
- * Quick-add presets. Prices are left out on purpose: they differ by country
- * and plan, and they change often.
+ * Quick-add presets: either something that renews, or a product with a
+ * warranty. Prices are left out on purpose: they differ by country and plan,
+ * and they change often.
  */
-export interface ItemTemplate {
-  name: string;
-  category: CategoryId;
-  frequency: Frequency;
-}
+export type ItemTemplate =
+  | { name: string; category: CategoryId; frequency: Frequency; warrantyYears?: never }
+  | { name: string; category: 'warranty'; warrantyYears: number; frequency?: never };
 
 const MONTHLY: Frequency = { unit: 'month', count: 1 };
 const HALF_YEARLY: Frequency = { unit: 'month', count: 6 };
@@ -57,6 +56,22 @@ export const TEMPLATES: readonly ItemTemplate[] = [
   { name: 'Domain renewal', category: 'software', frequency: YEARLY },
   { name: 'Web hosting', category: 'software', frequency: YEARLY },
   { name: 'Credit card annual fee', category: 'card_fee', frequency: YEARLY },
+  // Products with a warranty. One year is the most common manufacturer warranty.
+  { name: 'Laptop', category: 'warranty', warrantyYears: 1 },
+  { name: 'Phone', category: 'warranty', warrantyYears: 1 },
+  { name: 'Tablet', category: 'warranty', warrantyYears: 1 },
+  { name: 'TV', category: 'warranty', warrantyYears: 1 },
+  { name: 'Refrigerator', category: 'warranty', warrantyYears: 1 },
+  { name: 'Washing machine', category: 'warranty', warrantyYears: 1 },
+  { name: 'Air conditioner', category: 'warranty', warrantyYears: 1 },
+  { name: 'Dishwasher', category: 'warranty', warrantyYears: 1 },
+  { name: 'Microwave', category: 'warranty', warrantyYears: 1 },
+  { name: 'Vacuum cleaner', category: 'warranty', warrantyYears: 1 },
+  { name: 'Water purifier', category: 'warranty', warrantyYears: 1 },
+  { name: 'Headphones', category: 'warranty', warrantyYears: 1 },
+  { name: 'Smartwatch', category: 'warranty', warrantyYears: 1 },
+  { name: 'Camera', category: 'warranty', warrantyYears: 1 },
+  { name: 'Printer', category: 'warranty', warrantyYears: 1 },
 ];
 
 /** Shown before the user types anything. */
@@ -69,6 +84,7 @@ export const POPULAR_TEMPLATES: readonly ItemTemplate[] = [
   'Internet',
   'Car insurance',
   'Gym membership',
+  'Laptop',
 ].map((name) => TEMPLATES.find((t) => t.name === name)!);
 
 /** Templates matching what the user typed, best match first. */

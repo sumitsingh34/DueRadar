@@ -24,19 +24,20 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 Working now:
 
 - Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag
-- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (40+ common services)
+- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (50+ common services and products)
 - Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
 - Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
 - Price history: every cost change is recorded (for example $55 → $65 → $80), and the Overview lists the items whose price went up
 - All items: search by name, company, category or notes, with edit and delete on every row
+- Warranties: purchase date, price, store, warranty length (1, 2, 3 or 5 years sets the end date) and a photo of the receipt, with reminders before the warranty ends
 - Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. A reminder longer than the billing period is skipped
-- Backup: export a JSON backup or a CSV spreadsheet, and restore from a backup on a new phone
+- Backup: export a JSON backup (including receipt photos) or a CSV spreadsheet, and restore from a backup on a new phone
 - Your currency for new items (USD, EUR, GBP, INR and more)
 - Light and dark mode. Runs on iOS, Android and the web (reminders need the phone app)
 
 Planned:
 
-- Warranties (V2), home and vehicle maintenance (V3), licenses and life admin (V4), and an optional encrypted document vault (V5)
+- Home and vehicle maintenance (V3), licenses and life admin (V4), and an optional encrypted document vault (V5)
 
 ## Tech stack
 
@@ -47,6 +48,7 @@ Planned:
 | Storage    | `expo-sqlite` on the device, with versioned migrations      |
 | Reminders  | `expo-notifications`, scheduled locally on the device       |
 | Backup     | `expo-file-system`, `expo-sharing`, `expo-document-picker`  |
+| Receipts   | `expo-image-picker` (camera or photo library), stored in the app's own folder |
 | Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search and price insights |
 
 ## Project structure
@@ -77,7 +79,7 @@ Everything you track is an **item** with a key date. One shared table covers the
 | `items`         | Name, category, cost, schedule (`recurring`, `expiry` or `usage`), due date, status, optional parent item |
 | `price_history` | Each price an item has had, with the date it took effect                                          |
 | `reminders`     | Per-item reminder offsets and their scheduled notification IDs                                    |
-| `attachments`   | Receipts and documents stored in the app's private storage (later versions)                       |
+| `attachments`   | Receipt photos (and later, documents) stored in the app's private storage                        |
 | `settings`      | App preferences, such as the default currency                                                     |
 
 Dates are stored as local `YYYY-MM-DD` strings and amounts as integer cents. A repeating date is always computed from the date you entered, so a bill on the 31st comes back to the 31st after a short month instead of drifting to the 28th.

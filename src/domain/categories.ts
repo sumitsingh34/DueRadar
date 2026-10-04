@@ -21,10 +21,23 @@ export interface Category {
   phase: 1 | 2 | 3 | 4 | 5;
   defaultSchedule: ScheduleType;
   color: string;
+  /** Wording for this category where it differs from the defaults. */
+  wording?: {
+    /** Label for the start date field, which is only shown when this is set. */
+    startDate?: string;
+    /** Label for the company field. */
+    provider?: string;
+    /** "Expires" for a date to come, e.g. "Warranty ends". */
+    expires?: string;
+    /** "Expired" for a date that has passed, e.g. "Warranty ended". */
+    expired?: string;
+  };
+  /** Whether items in this category can have a receipt photo. */
+  receipts?: boolean;
 }
 
 /** Categories from later roadmap versions stay hidden until that version ships. */
-export const CURRENT_PHASE = 1;
+export const CURRENT_PHASE = 2;
 
 export const CATEGORIES: readonly Category[] = [
   { id: 'subscription', label: 'Subscription', phase: 1, defaultSchedule: 'recurring', color: '#208AEF' },
@@ -33,7 +46,20 @@ export const CATEGORIES: readonly Category[] = [
   { id: 'utility', label: 'Phone & internet', phase: 1, defaultSchedule: 'recurring', color: '#F76B15' },
   { id: 'software', label: 'Software & domains', phase: 1, defaultSchedule: 'recurring', color: '#3E63DD' },
   { id: 'card_fee', label: 'Card annual fee', phase: 1, defaultSchedule: 'recurring', color: '#E5484D' },
-  { id: 'warranty', label: 'Warranty', phase: 2, defaultSchedule: 'expiry', color: '#AD7F58' },
+  {
+    id: 'warranty',
+    label: 'Warranty',
+    phase: 2,
+    defaultSchedule: 'expiry',
+    color: '#AD7F58',
+    wording: {
+      startDate: 'Purchase date',
+      provider: 'Store',
+      expires: 'Warranty ends',
+      expired: 'Warranty ended',
+    },
+    receipts: true,
+  },
   { id: 'maintenance', label: 'Maintenance', phase: 3, defaultSchedule: 'recurring', color: '#46A758' },
   { id: 'vehicle', label: 'Vehicle', phase: 3, defaultSchedule: 'recurring', color: '#0090FF' },
   { id: 'license', label: 'License & certification', phase: 4, defaultSchedule: 'expiry', color: '#D6409F' },

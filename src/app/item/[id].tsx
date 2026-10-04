@@ -3,17 +3,20 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import type { PickedPhoto } from '@/attachments/pick';
+import { attachmentUri } from '@/attachments/storage';
 import { Button } from '@/components/form-controls';
 import { ItemForm } from '@/components/item-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { getReceipt, setReceipt } from '@/db/attachments';
 import { deleteItem, getItem, getPriceHistory, setDueDate, updateItem } from '@/db/items';
 import { addInterval, formatDate, todayISO } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { dueLabel, toDueItem } from '@/domain/summary';
 import type { Item, PricePoint } from '@/domain/types';
-import { confirmAsync } from '@/utils/confirm';
+import { confirmAsync, showMessage } from '@/utils/confirm';
 import { goBack } from '@/utils/navigation';
 
 /** Manual renewals can be confirmed this many days before they are due. */
@@ -25,6 +28,7 @@ export default function EditItemScreen() {
   // undefined while loading, null when the item does not exist.
   const [item, setItem] = useState<Item | null | undefined>(undefined);
   const [history, setHistory] = useState<PricePoint[]>([]);
+  const [receipt, setReceiptPhoto] = useState<PickedPhoto | null>(null);
   // Bumped to reload the item after it changes on this screen.
   const [version, setVersion] = useState(0);
 
@@ -33,9 +37,13 @@ export default function EditItemScreen() {
     (async () => {
       const found = await getItem(db, Number(id));
       const prices = found ? await getPriceHistory(db, found.id) : [];
+      const attachment = found ? await getReceipt(db, found.id) : null;
       if (active) {
         setItem(found);
         setHistory(prices);
+        setReceiptPhoto(
+          attachment ? { uri: attachmentUri(attachment.path), mimeType: attachment.mimeType } : null,
+        );
       }
     })().catch((error) => console.error('Failed to load item', error));
     return () => {
@@ -75,7 +83,7 @@ export default function EditItemScreen() {
   const remove = async () => {
     const confirmed = await confirmAsync(
       `Delete ${item.name}?`,
-      'Its price history will be deleted too. This can’t be undone.',
+      'Its price history and any receipt will be deleted too. This can’t be undone.',
       'Delete',
     );
     if (!confirmed) return;
@@ -115,9 +123,17 @@ export default function EditItemScreen() {
         // Remount with fresh values after "Mark as renewed" changes the item.
         key={item.updatedAt}
         initial={item}
+        initialReceipt={receipt}
         submitLabel="Save changes"
-        onSubmit={async (input) => {
+        onSubmit={async (input, receiptChange) => {
           await updateItem(db, item.id, input);
+          if (receiptChange.changed) {
+            try {
+              await setReceipt(db, item.id, receiptChange.photo);
+            } catch (error) {
+              showMessage('Saved, but the receipt wasn’t', error instanceof Error ? error.message : String(error));
+            }
+          }
           goBack();
         }}
         header={header}

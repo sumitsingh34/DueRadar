@@ -52,7 +52,7 @@ export function ItemRow({
   const remove = async () => {
     const confirmed = await confirmAsync(
       `Delete ${item.name}?`,
-      'Its price history will be deleted too. This can’t be undone.',
+      'Its price history and any receipt will be deleted too. This can’t be undone.',
       'Delete',
     );
     if (confirmed) await deleteItem(db, item.id);

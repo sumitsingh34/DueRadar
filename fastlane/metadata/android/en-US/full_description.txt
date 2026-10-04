@@ -6,11 +6,12 @@ WHAT YOU GET
 • Monthly and yearly totals at a glance
 • Reminders 30, 7 or 1 day before a due date, at the time you choose
 • Price history for every item, and a heads-up when a price goes up
-• Quick-add for 40+ popular services: type "Net" and pick Netflix
+• Warranties: purchase date, store, price and a photo of the receipt, with a reminder before the warranty ends
+• Quick-add for 50+ popular services and products: type "Net" and pick Netflix
 • Auto-renewals move forward on their own. Manual renewals stay flagged until you mark them renewed
 • Search, with edit and delete right from the list
 • Your currency: ₹, $, €, £ and more
-• Back up to a file and restore on a new phone, or export a spreadsheet (CSV)
+• Back up to a file (receipt photos included) and restore on a new phone, or export a spreadsheet (CSV)
 • Light and dark mode
 
 PRIVATE BY DESIGN

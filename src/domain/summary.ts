@@ -1,3 +1,4 @@
+import { getCategory } from './categories';
 import { daysBetween, nextOccurrenceOnOrAfter } from './dates';
 import { monthlyEquivalentCents } from './money';
 import type { Item } from './types';
@@ -41,15 +42,20 @@ export function toDueItem(item: Item, today: string): DueItem | null {
   return dueDate ? { item, dueDate, daysUntil: daysBetween(today, dueDate) } : null;
 }
 
-/** Short human label, e.g. "Renews in 5 days", "Renews in 12 months" or "Expired 2 days ago". */
+/**
+ * Short human label, e.g. "Renews in 5 days", "Renews in 12 months",
+ * "Expired 2 days ago" or, for a warranty, "Warranty ends in 11 months".
+ */
 export function dueLabel({ item, daysUntil }: DueItem): string {
-  const verb = item.scheduleType === 'expiry' ? 'Expires' : 'Renews';
+  const wording = getCategory(item.category).wording;
+  const verb = item.scheduleType === 'expiry' ? (wording?.expires ?? 'Expires') : 'Renews';
   if (daysUntil === 0) return `${verb} today`;
   if (daysUntil === 1) return `${verb} tomorrow`;
   if (daysUntil > 1) return `${verb} in ${describeDays(daysUntil)}`;
   const ago = -daysUntil;
   if (item.scheduleType === 'expiry') {
-    return `Expired ${ago === 1 ? 'yesterday' : `${describeDays(ago)} ago`}`;
+    const past = wording?.expired ?? 'Expired';
+    return `${past} ${ago === 1 ? 'yesterday' : `${describeDays(ago)} ago`}`;
   }
   return `Overdue by ${describeDays(ago)}`;
 }

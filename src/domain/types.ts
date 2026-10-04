@@ -53,12 +53,24 @@ export type ItemInput = Pick<
   | 'currency'
   | 'intervalUnit'
   | 'intervalCount'
+  | 'startDate'
   | 'dueDate'
   | 'autoRenew'
   | 'status'
   | 'provider'
   | 'notes'
 >;
+
+/** A file attached to an item, such as a receipt photo, stored in the app's own folder. */
+export interface Attachment {
+  id: number;
+  itemId: number;
+  kind: 'receipt';
+  /** Path relative to the app's document folder, e.g. "receipts/12-1730000000000.jpg". */
+  path: string;
+  mimeType: string | null;
+  createdAt: string;
+}
 
 export interface PricePoint {
   id: number;

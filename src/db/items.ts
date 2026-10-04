@@ -1,5 +1,7 @@
 import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
 
+import { deleteAttachmentFile } from '@/attachments/storage';
+import { attachmentPaths } from '@/db/attachments';
 import { emitDataChanged } from '@/db/events';
 import type { CategoryId } from '@/domain/categories';
 import { todayISO, type IntervalUnit } from '@/domain/dates';
@@ -93,7 +95,10 @@ export async function updateItem(db: SQLiteDatabase, id: number, input: ItemInpu
 }
 
 export async function deleteItem(db: SQLiteDatabase, id: number): Promise<void> {
+  const files = await attachmentPaths(db, id);
+  // Deleting the item also deletes its price history, reminders and attachment rows.
   await db.runAsync('DELETE FROM items WHERE id = ?', id);
+  for (const path of files) deleteAttachmentFile(path);
   emitDataChanged();
 }
 
@@ -168,6 +173,7 @@ function toColumns(input: ItemInput): Record<string, SQLiteBindValue> {
     currency: input.currency,
     interval_unit: recurring ? input.intervalUnit : null,
     interval_count: recurring ? input.intervalCount : null,
+    start_date: input.startDate,
     due_date: input.dueDate,
     auto_renew: recurring && input.autoRenew ? 1 : 0,
     status: input.status,

@@ -6,7 +6,20 @@ import { normalizeSettings, type AppSettings } from './settings';
 import { nextDueDate } from './summary';
 import type { Item, ItemStatus, PricePoint, ScheduleType } from './types';
 
-export const BACKUP_FORMAT = 1;
+/** Format 2 added receipt photos. Format 1 backups are still accepted. */
+export const BACKUP_FORMAT = 2;
+
+/** A receipt photo in a backup, with the file itself as base64. */
+export interface BackupAttachment {
+  itemId: number;
+  kind: 'receipt';
+  /** File name only. It is restored into the app's receipts folder. */
+  fileName: string;
+  mimeType: string | null;
+  createdAt: string;
+  /** The file's contents, base64-encoded. */
+  data: string;
+}
 
 export interface Backup {
   app: 'DueRadar';
@@ -15,17 +28,31 @@ export interface Backup {
   settings: AppSettings;
   items: Item[];
   priceHistory: Omit<PricePoint, 'id'>[];
+  attachments: BackupAttachment[];
 }
 
 export class BackupError extends Error {}
+
+/** A plain file name: no folders, so a backup can never write outside the receipts folder. */
+const SAFE_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 export function createBackup(
   items: Item[],
   priceHistory: Omit<PricePoint, 'id'>[],
   settings: AppSettings,
+  attachments: BackupAttachment[] = [],
   now = new Date(),
 ): Backup {
-  return { app: 'DueRadar', format: BACKUP_FORMAT, exportedAt: now.toISOString(), settings, items, priceHistory };
+  return {
+    app: 'DueRadar',
+    format: BACKUP_FORMAT,
+    exportedAt: now.toISOString(),
+    settings,
+    items,
+    priceHistory,
+    attachments,
+  };
 }
 
 /** Parses and validates a backup file. Throws BackupError with a message for the user. */
@@ -64,6 +91,34 @@ export function parseBackup(text: string): Backup {
       effectiveDate: p.effectiveDate as string,
     }));
 
+  // Receipts with an unsafe file name, bad data or a missing item are skipped.
+  const fileNames = new Set<string>();
+  const attachments: BackupAttachment[] = [];
+  for (const a of Array.isArray(data.attachments) ? data.attachments : []) {
+    if (
+      !isRecord(a) ||
+      typeof a.itemId !== 'number' ||
+      !ids.has(a.itemId) ||
+      a.kind !== 'receipt' ||
+      typeof a.fileName !== 'string' ||
+      !SAFE_FILE_NAME.test(a.fileName) ||
+      fileNames.has(a.fileName) ||
+      typeof a.data !== 'string' ||
+      !BASE64.test(a.data)
+    ) {
+      continue;
+    }
+    fileNames.add(a.fileName);
+    attachments.push({
+      itemId: a.itemId,
+      kind: 'receipt',
+      fileName: a.fileName,
+      mimeType: typeof a.mimeType === 'string' ? a.mimeType : null,
+      createdAt: typeof a.createdAt === 'string' ? a.createdAt : new Date().toISOString(),
+      data: a.data,
+    });
+  }
+
   return {
     app: 'DueRadar',
     format: data.format,
@@ -75,6 +130,7 @@ export function parseBackup(text: string): Backup {
       parentId: item.parentId != null && ids.has(item.parentId) ? item.parentId : null,
     })),
     priceHistory,
+    attachments,
   };
 }
 
@@ -86,6 +142,7 @@ const CSV_HEADER = [
   'Currency',
   'Frequency',
   'Next date',
+  'Start or purchase date',
   'Auto-renew',
   'Status',
   'Company',
@@ -112,6 +169,7 @@ export function itemsToCsv(items: readonly Item[], today: string): string {
       item.currency,
       frequency ? frequencyLabel(frequency) : '',
       nextDueDate(item, today) ?? '',
+      item.startDate ?? '',
       item.scheduleType === 'recurring' ? (item.autoRenew ? 'Yes' : 'No') : '',
       item.status[0].toUpperCase() + item.status.slice(1),
       item.provider ?? '',
