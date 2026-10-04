@@ -1,8 +1,15 @@
 import { useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { DateField } from '@/components/date-field';
-import { Button, ChipGroup, FormField, TextField } from '@/components/form-controls';
+import {
+  Button,
+  ChipButtons,
+  ChipGroup,
+  FormField,
+  SwitchRow,
+  TextField,
+} from '@/components/form-controls';
 import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { AVAILABLE_CATEGORIES, getCategory, type CategoryId } from '@/domain/categories';
@@ -13,6 +20,7 @@ import {
   type Frequency,
 } from '@/domain/frequency';
 import { centsToInput, DEFAULT_CURRENCY, parseAmountInput } from '@/domain/money';
+import { findTemplates, POPULAR_TEMPLATES, TEMPLATES, type ItemTemplate } from '@/domain/templates';
 import type { ItemInput, ItemStatus } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -33,6 +41,8 @@ const frequencyKey = (f: Frequency) => `${f.unit}:${f.count}`;
 
 interface ItemFormProps {
   initial?: ItemInput;
+  /** Currency for a new item. Edits keep the item's own currency. */
+  defaultCurrency?: string;
   submitLabel: string;
   onSubmit: (input: ItemInput) => Promise<void>;
   /** Extra content shown above the fields, e.g. renewal status. */
@@ -43,9 +53,18 @@ interface ItemFormProps {
 
 type Errors = Partial<Record<'name' | 'amount' | 'dueDate', string>>;
 
-export function ItemForm({ initial, submitLabel, onSubmit, header, footer }: ItemFormProps) {
+export function ItemForm({
+  initial,
+  defaultCurrency,
+  submitLabel,
+  onSubmit,
+  header,
+  footer,
+}: ItemFormProps) {
   const theme = useTheme();
+  const currency = initial?.currency ?? defaultCurrency ?? DEFAULT_CURRENCY;
   const [name, setName] = useState(initial?.name ?? '');
+  const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
   const [category, setCategory] = useState<CategoryId>(initial?.category ?? 'subscription');
   const [schedule, setSchedule] = useState<FormSchedule>(
     initial?.scheduleType === 'expiry' ? 'expiry' : 'recurring',
@@ -83,6 +102,24 @@ export function ItemForm({ initial, submitLabel, onSubmit, header, footer }: Ite
     }
   };
 
+  // Quick-add: popular picks before typing, matches while typing. New items only.
+  const suggestions: readonly ItemTemplate[] = initial
+    ? []
+    : name.trim()
+      ? findTemplates(name).filter((t) => t.name !== appliedTemplate)
+      : POPULAR_TEMPLATES;
+
+  const applyTemplate = (templateName: string) => {
+    const template = TEMPLATES.find((t) => t.name === templateName);
+    if (!template) return;
+    setName(template.name);
+    setCategory(template.category);
+    setSchedule('recurring');
+    setFrequency(template.frequency);
+    setAutoRenew(true);
+    setAppliedTemplate(template.name);
+  };
+
   const submit = async () => {
     const next: Errors = {};
     if (!name.trim()) next.name = 'Enter a name.';
@@ -104,7 +141,7 @@ export function ItemForm({ initial, submitLabel, onSubmit, header, footer }: Ite
         category,
         scheduleType: schedule,
         amountCents,
-        currency: initial?.currency ?? DEFAULT_CURRENCY,
+        currency,
         intervalUnit: recurring ? frequency.unit : null,
         intervalCount: recurring ? frequency.count : null,
         dueDate,
@@ -135,6 +172,22 @@ export function ItemForm({ initial, submitLabel, onSubmit, header, footer }: Ite
             autoFocus={!initial}
             returnKeyType="next"
           />
+          {suggestions.length > 0 ? (
+            <View style={styles.suggestions}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {name.trim() ? 'Tap to fill in the details' : 'Popular'}
+              </ThemedText>
+              <ChipButtons
+                accessibilityLabel="Suggestions"
+                options={suggestions.map((t) => ({
+                  value: t.name,
+                  label: t.name,
+                  color: getCategory(t.category).color,
+                }))}
+                onPress={applyTemplate}
+              />
+            </View>
+          ) : null}
         </FormField>
 
         <FormField label="Category">
@@ -155,7 +208,9 @@ export function ItemForm({ initial, submitLabel, onSubmit, header, footer }: Ite
           />
         </FormField>
 
-        <FormField label={recurring ? 'Cost per renewal' : 'Price paid (optional)'} error={errors.amount}>
+        <FormField
+          label={recurring ? `Cost per renewal (${currency})` : `Price paid (${currency}, optional)`}
+          error={errors.amount}>
           <TextField
             value={amount}
             onChangeText={setAmount}
@@ -188,22 +243,16 @@ export function ItemForm({ initial, submitLabel, onSubmit, header, footer }: Ite
         </FormField>
 
         {recurring ? (
-          <View style={styles.switchRow}>
-            <View style={styles.switchText}>
-              <ThemedText>Renews automatically</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {autoRenew
-                  ? 'The renewal date moves forward on its own.'
-                  : 'Shown as overdue until you mark it renewed.'}
-              </ThemedText>
-            </View>
-            <Switch
-              value={autoRenew}
-              onValueChange={setAutoRenew}
-              accessibilityLabel="Renews automatically"
-              trackColor={{ true: theme.tint, false: theme.backgroundSelected }}
-            />
-          </View>
+          <SwitchRow
+            label="Renews automatically"
+            description={
+              autoRenew
+                ? 'The renewal date moves forward on its own.'
+                : 'Shown as overdue until you mark it renewed.'
+            }
+            value={autoRenew}
+            onValueChange={setAutoRenew}
+          />
         ) : null}
 
         {initial ? (
@@ -255,14 +304,8 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     gap: Spacing.four,
   },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  switchText: {
-    flex: 1,
-    gap: Spacing.half,
+  suggestions: {
+    gap: Spacing.two,
   },
   notes: {
     minHeight: 88,

@@ -1,5 +1,6 @@
 import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
 
+import { emitDataChanged } from '@/db/events';
 import type { CategoryId } from '@/domain/categories';
 import { todayISO, type IntervalUnit } from '@/domain/dates';
 import type { Item, ItemInput, ItemStatus, PricePoint, ScheduleType } from '@/domain/types';
@@ -60,6 +61,7 @@ export async function createItem(db: SQLiteDatabase, input: ItemInput): Promise<
       await addPricePoint(db, id, input.amountCents, input.currency);
     }
   });
+  emitDataChanged();
   return id;
 }
 
@@ -87,10 +89,12 @@ export async function updateItem(db: SQLiteDatabase, id: number, input: ItemInpu
       await addPricePoint(db, id, input.amountCents!, input.currency);
     }
   });
+  emitDataChanged();
 }
 
 export async function deleteItem(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM items WHERE id = ?', id);
+  emitDataChanged();
 }
 
 /** Moves a manually renewed item's due date to its next renewal. */
@@ -100,6 +104,33 @@ export async function setDueDate(db: SQLiteDatabase, id: number, dueDate: string
     dueDate,
     id,
   );
+  emitDataChanged();
+}
+
+/** Switches every item, and its price history, to one currency. Amounts are not converted. */
+export async function setCurrencyForAllItems(db: SQLiteDatabase, currency: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE items SET currency = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE currency != ?`,
+      currency,
+      currency,
+    );
+    await db.runAsync('UPDATE price_history SET currency = ?', currency);
+  });
+  emitDataChanged();
+}
+
+/** Price history of every item, for backups. */
+export async function listAllPriceHistory(db: SQLiteDatabase): Promise<Omit<PricePoint, 'id'>[]> {
+  const rows = await db.getAllAsync<PriceRow>(
+    'SELECT * FROM price_history ORDER BY item_id, effective_date, id',
+  );
+  return rows.map((r) => ({
+    itemId: r.item_id,
+    amountCents: r.amount_cents,
+    currency: r.currency,
+    effectiveDate: r.effective_date,
+  }));
 }
 
 /** Oldest first. */

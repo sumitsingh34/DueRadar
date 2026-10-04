@@ -9,3 +9,8 @@ export function confirmAsync(title: string, message: string, confirmLabel: strin
     ]);
   });
 }
+
+/** Shows a short message with an OK button. */
+export function showMessage(title: string, message: string): void {
+  Alert.alert(title, message);
+}

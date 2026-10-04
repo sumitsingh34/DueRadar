@@ -11,11 +11,13 @@ import { todayISO } from '@/domain/dates';
 import { DEFAULT_CURRENCY, formatMoney } from '@/domain/money';
 import { buildDashboard } from '@/domain/summary';
 import { useItems } from '@/hooks/use-items';
+import { useSettings } from '@/hooks/use-settings';
 
 const UPCOMING_DAYS = 30;
 
 export default function OverviewScreen() {
   const items = useItems();
+  const settings = useSettings();
 
   if (items === null) return <ThemedView style={styles.fill} />;
 
@@ -37,7 +39,7 @@ export default function OverviewScreen() {
   const summary = buildDashboard(items, todayISO(), UPCOMING_DAYS);
   const [primary, ...otherCurrencies] = summary.totals;
   const monthly = primary?.monthlyCents ?? 0;
-  const currency = primary?.currency ?? DEFAULT_CURRENCY;
+  const currency = primary?.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
 
   return (
     <TabScreen title="Overview">

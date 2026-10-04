@@ -6,23 +6,24 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 
 **Private by design:** there are no accounts and no server, and nothing to sign up for. Your data is stored in a SQLite database on your own device and never leaves it.
 
-> Status: early development (Week 1 foundation). Not yet in the app stores.
+> Status: early development. Not yet in the app stores.
 
 ## Features
 
 Working now:
 
 - Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag
+- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (40+ common services)
 - Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
 - Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
 - Price history: every cost change is recorded (for example $55 → $65 → $80)
-- Light and dark mode. Runs on iOS, Android and the web
+- Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. A reminder longer than the billing period is skipped
+- Backup: export a JSON backup or a CSV spreadsheet, and restore from a backup on a new phone
+- Your currency for new items (USD, EUR, GBP, INR and more)
+- Light and dark mode. Runs on iOS, Android and the web (reminders need the phone app)
 
 Planned:
 
-- Reminders scheduled on the device (30, 7 and 1 days before)
-- Quick-add templates for common services
-- Export and import as JSON/CSV for backups
 - Warranties (V2), home and vehicle maintenance (V3), licenses and life admin (V4), and an optional encrypted document vault (V5)
 
 ## Tech stack
@@ -32,19 +33,24 @@ Planned:
 | App        | [Expo](https://expo.dev) (React Native) + TypeScript        |
 | Navigation | Expo Router (file-based), native tabs                       |
 | Storage    | `expo-sqlite` on the device, with versioned migrations      |
-| Tests      | Jest (`jest-expo`) for the date, money and dashboard logic  |
+| Reminders  | `expo-notifications`, scheduled locally on the device       |
+| Backup     | `expo-file-system`, `expo-sharing`, `expo-document-picker`  |
+| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates and backups |
 
 ## Project structure
 
 ```
 src/
   app/            Screens (Expo Router). Every file is a route.
-    (tabs)/       Overview and All items tabs
+    (tabs)/       Overview, All items and Settings tabs
     item/         Add item (modal) and Edit item screens
   components/     UI building blocks (form controls, item row, date field)
-  db/             SQLite migrations and queries
-  domain/         Pure logic with no React or database: dates, money, schedules, dashboard
+  db/             SQLite migrations, queries, settings and backup restore
+  domain/         Pure logic with no React or database: dates, money, schedules,
+                  dashboard, reminder planning, templates, backup format
   hooks/          React hooks (theme, data loading)
+  notifications/  Scheduling reminders (a no-op on the web)
+  utils/          Dialogs, navigation, saving and opening files
 ```
 
 ## Data model
