@@ -1,17 +1,27 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { BrandBlue, Colors } from '@/constants/theme';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
+  // The selected tab is highlighted in the app's blue: a blue pill behind a
+  // white icon on Android, a blue icon on iOS, and a blue label on both.
   return (
     <NativeTabs
       backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      tintColor={colors.tint}
+      indicatorColor={BrandBlue}
+      iconColor={{
+        default: colors.textSecondary,
+        selected: Platform.OS === 'android' ? '#ffffff' : colors.tint,
+      }}
+      labelStyle={{
+        default: { color: colors.textSecondary },
+        selected: { color: colors.tint, fontWeight: '600' },
+      }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Overview</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="house.fill" md="home" />

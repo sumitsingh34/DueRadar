@@ -23,19 +23,19 @@ export default function ItemsScreen() {
   return (
     <TabScreen title="All items">
       {items.length === 0 ? (
-        <ThemedText themeColor="textSecondary">No items yet. Tap “+ Add” to start.</ThemedText>
+        <ThemedText themeColor="textSecondary">No items yet. Tap “Add” to start.</ThemedText>
       ) : null}
       {active.length > 0 ? (
         <Section title={`Active · ${active.length}`}>
           {active.map(({ item, due }) => (
-            <ItemRow key={item.id} item={item} due={due} />
+            <ItemRow key={item.id} item={item} due={due} showActions />
           ))}
         </Section>
       ) : null}
       {inactive.length > 0 ? (
         <Section title={`Paused or cancelled · ${inactive.length}`}>
           {inactive.map(({ item, due }) => (
-            <ItemRow key={item.id} item={item} due={due} />
+            <ItemRow key={item.id} item={item} due={due} showActions />
           ))}
         </Section>
       ) : null}

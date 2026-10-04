@@ -36,6 +36,9 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/** The blue of the app icon and splash screen. */
+export const BrandBlue = '#208AEF';
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
@@ -71,7 +74,6 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 /** Space for the floating tab bar at the top of the web layout. */
 export const TopTabInset = Platform.select({ web: 72 }) ?? 0;
 export const MaxContentWidth = 800;

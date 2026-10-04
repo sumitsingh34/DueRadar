@@ -11,7 +11,8 @@ import { Pressable, View, StyleSheet } from 'react-native';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { BrandBlue, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function AppTabs() {
   return (
@@ -35,12 +36,16 @@ export default function AppTabs() {
 }
 
 export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+  const theme = useTheme();
+  // The selected tab is highlighted in the app's blue, as on the phone.
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView
-        type={isFocused ? 'backgroundSelected' : 'backgroundElement'}
-        style={styles.tabButtonView}>
-        <ThemedText type="small" themeColor={isFocused ? 'text' : 'textSecondary'}>
+        type="backgroundElement"
+        style={[styles.tabButtonView, isFocused && { backgroundColor: BrandBlue }]}>
+        <ThemedText
+          type={isFocused ? 'smallBold' : 'small'}
+          style={{ color: isFocused ? '#ffffff' : theme.textSecondary }}>
           {children}
         </ThemedText>
       </ThemedView>

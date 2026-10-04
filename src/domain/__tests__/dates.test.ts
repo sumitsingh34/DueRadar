@@ -1,10 +1,18 @@
 import {
   addInterval,
   daysBetween,
+  formatShortDate,
   isISODate,
   nextOccurrenceOnOrAfter,
   toISODate,
 } from '@/domain/dates';
+
+describe('formatShortDate', () => {
+  it('shows the year only when it differs from this year', () => {
+    expect(formatShortDate('2026-11-04', '2026-10-03')).toBe('Nov 4');
+    expect(formatShortDate('2027-01-15', '2026-10-03')).toBe('Jan 15, 2027');
+  });
+});
 
 describe('addInterval', () => {
   it('adds days and weeks across month and year boundaries', () => {

@@ -95,6 +95,16 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** "Nov 4", or "Nov 4, 2027" when the year differs from `todayISO`'s. */
+export function formatShortDate(iso: string, todayIso: string): string {
+  const sameYear = iso.slice(0, 4) === todayIso.slice(0, 4);
+  return fromISODate(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+}
+
 function parse(iso: string): { y: number; m: number; d: number } {
   const match = ISO_DATE.exec(iso);
   if (!match) throw new Error(`Invalid date: ${iso}`);
