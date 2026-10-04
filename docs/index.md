@@ -12,6 +12,13 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 expiry. Keep track of subscriptions, memberships, insurance, phone plans, domains and card annual
 fees in one place.
 
+<p align="center">
+  <img src="assets/screenshots/1-new-item.jpg" width="180" alt="Adding an item, with quick-add suggestions">
+  <img src="assets/screenshots/2-overview.jpg" width="180" alt="Overview: monthly cost and what's due next">
+  <img src="assets/screenshots/3-all-items.jpg" width="180" alt="All items, with search, edit and delete">
+  <img src="assets/screenshots/4-settings.jpg" width="180" alt="Settings: when and how early to be reminded">
+</p>
+
 ## Features
 
 - What you pay each month and each year, at a glance

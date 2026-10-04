@@ -10,6 +10,15 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 
 > Status: early development. Not yet in the app stores.
 
+## Screenshots
+
+<p>
+  <img src="docs/assets/screenshots/1-new-item.jpg" width="200" alt="Adding an item, with quick-add suggestions">
+  <img src="docs/assets/screenshots/2-overview.jpg" width="200" alt="Overview: monthly cost and what's due next">
+  <img src="docs/assets/screenshots/3-all-items.jpg" width="200" alt="All items, with search, edit and delete">
+  <img src="docs/assets/screenshots/4-settings.jpg" width="200" alt="Settings: when and how early to be reminded">
+</p>
+
 ## Features
 
 Working now:
