@@ -5,8 +5,10 @@ import { Text } from 'react-native';
 const ICONS = {
   add: { ios: 'plus', android: 'add', web: 'add', fallback: '+' },
   chevron: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right', fallback: '›' },
+  clear: { ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel', fallback: '✕' },
   delete: { ios: 'trash', android: 'delete', web: 'delete', fallback: '✕' },
   edit: { ios: 'pencil', android: 'edit', web: 'edit', fallback: '✎' },
+  search: { ios: 'magnifyingglass', android: 'search', web: 'search', fallback: '⌕' },
 } as const;
 
 export type IconName = keyof typeof ICONS;

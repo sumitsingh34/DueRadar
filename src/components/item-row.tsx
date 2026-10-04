@@ -46,6 +46,7 @@ export function ItemRow({
     }
   }
 
+  const categoryColor = getCategory(item.category).color;
   const open = () => router.push({ pathname: '/item/[id]', params: { id: String(item.id) } });
 
   const remove = async () => {
@@ -58,20 +59,37 @@ export function ItemRow({
   };
 
   return (
-    <View style={[styles.row, { backgroundColor: theme.backgroundElement }]}>
+    <View
+      style={[styles.row, { backgroundColor: theme.backgroundElement, borderColor: categoryColor }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={[item.name, subtitle, price].filter(Boolean).join(', ')}
         onPress={open}
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
-        <View style={[styles.dot, { backgroundColor: getCategory(item.category).color }]} />
+        <View style={[styles.dot, { backgroundColor: categoryColor }]} />
         <View style={styles.text}>
-          <View style={styles.titleLine}>
-            <ThemedText numberOfLines={1} style={styles.name}>
-              {item.name}
-            </ThemedText>
-            {price ? <ThemedText type="smallBold">{price}</ThemedText> : null}
-          </View>
+          {showActions ? (
+            // The edit and delete buttons take width, so the price gets its own line.
+            <>
+              <ThemedText numberOfLines={1}>{item.name}</ThemedText>
+              {price ? (
+                <ThemedText type="smallBold" numberOfLines={1}>
+                  {price}
+                </ThemedText>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.titleLine}>
+              <ThemedText numberOfLines={1} style={styles.name}>
+                {item.name}
+              </ThemedText>
+              {price ? (
+                <ThemedText type="smallBold" numberOfLines={1} style={styles.price}>
+                  {price}
+                </ThemedText>
+              ) : null}
+            </View>
+          )}
           <ThemedText
             type="small"
             numberOfLines={1}
@@ -126,6 +144,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 14,
+    // Outlined in the category's color, matching the dot.
+    borderWidth: 1.5,
   },
   main: {
     flex: 1,
@@ -153,6 +173,9 @@ const styles = StyleSheet.create({
   },
   name: {
     flexShrink: 1,
+  },
+  price: {
+    flexShrink: 0,
   },
   actions: {
     flexDirection: 'row',
