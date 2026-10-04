@@ -41,15 +41,28 @@ export function toDueItem(item: Item, today: string): DueItem | null {
   return dueDate ? { item, dueDate, daysUntil: daysBetween(today, dueDate) } : null;
 }
 
-/** Short human label, e.g. "Renews in 5 days" or "Expired 2 days ago". */
+/** Short human label, e.g. "Renews in 5 days", "Renews in 12 months" or "Expired 2 days ago". */
 export function dueLabel({ item, daysUntil }: DueItem): string {
   const verb = item.scheduleType === 'expiry' ? 'Expires' : 'Renews';
   if (daysUntil === 0) return `${verb} today`;
   if (daysUntil === 1) return `${verb} tomorrow`;
-  if (daysUntil > 1) return `${verb} in ${daysUntil} days`;
+  if (daysUntil > 1) return `${verb} in ${describeDays(daysUntil)}`;
   const ago = -daysUntil;
-  if (item.scheduleType === 'expiry') return `Expired ${ago === 1 ? 'yesterday' : `${ago} days ago`}`;
-  return `Overdue by ${ago} ${ago === 1 ? 'day' : 'days'}`;
+  if (item.scheduleType === 'expiry') {
+    return `Expired ${ago === 1 ? 'yesterday' : `${describeDays(ago)} ago`}`;
+  }
+  return `Overdue by ${describeDays(ago)}`;
+}
+
+/** "5 days" up to two months, then "3 months", then "2 years" from two years. */
+export function describeDays(days: number): string {
+  if (days >= 730) return plural(Math.round(days / 365.25), 'year');
+  if (days > 60) return plural(Math.round(days / 30.44), 'month');
+  return plural(days, 'day');
+}
+
+function plural(count: number, unit: string): string {
+  return `${count} ${unit}${count === 1 ? '' : 's'}`;
 }
 
 export function buildDashboard(items: Item[], today: string, windowDays = 30): DashboardSummary {

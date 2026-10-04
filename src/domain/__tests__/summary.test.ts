@@ -60,4 +60,14 @@ describe('dueLabel', () => {
     expect(label({ dueDate: '2026-10-01', autoRenew: false })).toBe('Overdue by 2 days');
     expect(label({ dueDate: '2026-10-02', scheduleType: 'expiry' })).toBe('Expired yesterday');
   });
+
+  it('uses months and years for dates far away', () => {
+    const label = (overrides: Partial<Item>) => dueLabel(toDueItem(makeItem(overrides), TODAY)!);
+    expect(label({ dueDate: '2026-12-02', intervalUnit: 'year' })).toBe('Renews in 60 days');
+    expect(label({ dueDate: '2026-12-03', intervalUnit: 'year' })).toBe('Renews in 2 months');
+    expect(label({ dueDate: '2027-10-03', intervalUnit: 'year' })).toBe('Renews in 12 months');
+    expect(label({ dueDate: '2036-10-03', scheduleType: 'expiry' })).toBe('Expires in 10 years');
+    expect(label({ dueDate: '2026-07-01', autoRenew: false })).toBe('Overdue by 3 months');
+    expect(label({ dueDate: '2025-01-01', scheduleType: 'expiry' })).toBe('Expired 21 months ago');
+  });
 });
