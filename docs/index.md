@@ -64,3 +64,7 @@ Read the [privacy policy](privacy/).
 
 DueRadar for Android is coming soon. The source code is on
 [GitHub](https://github.com/sumitsingh34/DueRadar).
+
+---
+
+Made by [Sumit Singh](https://sumitsingh.dev).
