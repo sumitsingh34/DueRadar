@@ -6,19 +6,23 @@ import {
   readAttachmentBase64,
   writeAttachmentBase64,
 } from '@/attachments/storage';
+import { listAssets, listReadings } from '@/db/assets';
 import { listAttachments } from '@/db/attachments';
 import { emitDataChanged } from '@/db/events';
-import { listAllPriceHistory, listItems } from '@/db/items';
+import { listAllCompletions, listAllPriceHistory, listItems } from '@/db/items';
 import { getSettings, writeSettings } from '@/db/settings';
 import { createBackup, type Backup, type BackupAttachment } from '@/domain/backup';
 
 /** Everything, including receipt photos as base64. */
 export async function exportBackup(db: SQLiteDatabase): Promise<Backup> {
-  const [items, priceHistory, settings, attachments] = await Promise.all([
+  const [items, priceHistory, settings, attachments, assets, readings, completions] = await Promise.all([
     listItems(db),
     listAllPriceHistory(db),
     getSettings(db),
     listAttachments(db),
+    listAssets(db),
+    listReadings(db),
+    listAllCompletions(db),
   ]);
 
   const files: BackupAttachment[] = [];
@@ -34,13 +38,21 @@ export async function exportBackup(db: SQLiteDatabase): Promise<Backup> {
       data,
     });
   }
-  return createBackup(items, priceHistory, settings, files);
+  return createBackup({
+    settings,
+    items,
+    priceHistory,
+    attachments: files,
+    assets,
+    usageReadings: readings.map(({ assetId, reading, date }) => ({ assetId, reading, date })),
+    completions,
+  });
 }
 
 /**
- * Replaces all items, price history, receipts and settings with the backup's.
- * Receipt files are written first, the data is swapped in one transaction,
- * and only then are old receipt files removed, so a failure loses nothing.
+ * Replaces all data and settings with the backup's. Receipt files are written
+ * first, the data is swapped in one transaction, and only then are old receipt
+ * files removed, so a failure loses nothing.
  */
 export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise<void> {
   const receipts = attachmentsSupported
@@ -48,16 +60,40 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
     : [];
 
   await db.withTransactionAsync(async () => {
-    // Deleting items also deletes their price history, reminders and attachments.
-    await db.execAsync('DELETE FROM items; DELETE FROM settings;');
+    // Deleting items also deletes their price history, history and attachments,
+    // and deleting vehicles and homes deletes their odometer readings.
+    await db.execAsync('DELETE FROM items; DELETE FROM assets; DELETE FROM settings;');
+
+    for (const asset of backup.assets) {
+      await db.runAsync(
+        `INSERT INTO assets (id, name, kind, usage_unit, details, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        asset.id,
+        asset.name,
+        asset.kind,
+        asset.usageUnit,
+        JSON.stringify(asset.details),
+        asset.notes,
+        asset.createdAt,
+        asset.updatedAt,
+      );
+    }
+    for (const reading of backup.usageReadings) {
+      await db.runAsync(
+        'INSERT INTO usage_readings (asset_id, reading, reading_date) VALUES (?, ?, ?)',
+        reading.assetId,
+        reading.reading,
+        reading.date,
+      );
+    }
 
     // Insert without parent links first, since a parent may come later in the list.
     for (const item of backup.items) {
       await db.runAsync(
         `INSERT INTO items (id, name, category, schedule_type, amount_cents, currency,
           interval_unit, interval_count, start_date, due_date, usage_interval, usage_unit,
-          next_usage, auto_renew, status, provider, notes, details, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          next_usage, auto_renew, status, provider, notes, details, asset_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         item.id,
         item.name,
         item.category,
@@ -76,6 +112,7 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
         item.provider,
         item.notes,
         JSON.stringify(item.details),
+        item.assetId,
         item.createdAt,
         item.updatedAt,
       );
@@ -93,6 +130,18 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
         price.amountCents,
         price.currency,
         price.effectiveDate,
+      );
+    }
+
+    for (const done of backup.completions) {
+      await db.runAsync(
+        'INSERT INTO completions (item_id, done_date, amount_cents, currency, usage_reading, note) VALUES (?, ?, ?, ?, ?, ?)',
+        done.itemId,
+        done.date,
+        done.amountCents,
+        done.currency,
+        done.usage,
+        done.note,
       );
     }
 

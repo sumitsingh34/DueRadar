@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
@@ -15,8 +16,14 @@ import {
 import { ReceiptField } from '@/components/receipt-field';
 import { ThemedText } from '@/components/themed-text';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { AVAILABLE_CATEGORIES, getCategory, type CategoryId } from '@/domain/categories';
-import { addInterval, todayISO } from '@/domain/dates';
+import { ASSET_KINDS, assetKindsLabel } from '@/domain/assets';
+import {
+  AVAILABLE_CATEGORIES,
+  getCategory,
+  SCHEDULE_LABELS,
+  type CategoryId,
+} from '@/domain/categories';
+import { addInterval, formatDate, todayISO } from '@/domain/dates';
 import {
   DEFAULT_FREQUENCY,
   FREQUENCY_PRESETS,
@@ -24,16 +31,17 @@ import {
   type Frequency,
 } from '@/domain/frequency';
 import { centsToInput, DEFAULT_CURRENCY, parseAmountInput } from '@/domain/money';
-import { findTemplates, POPULAR_TEMPLATES, TEMPLATES, type ItemTemplate } from '@/domain/templates';
-import type { ItemInput, ItemStatus } from '@/domain/types';
+import {
+  findTemplates,
+  POPULAR_TEMPLATES,
+  templateSchedule,
+  TEMPLATES,
+  type ItemTemplate,
+} from '@/domain/templates';
+import type { Asset, AssetKind, ItemInput, ItemStatus, ScheduleType } from '@/domain/types';
+import { formatDistance, parseDistanceInput } from '@/domain/usage';
+import { useAssets } from '@/hooks/use-assets';
 import { useTheme } from '@/hooks/use-theme';
-
-type FormSchedule = 'recurring' | 'expiry';
-
-const SCHEDULE_OPTIONS = [
-  { value: 'recurring', label: 'Renews' },
-  { value: 'expiry', label: 'Expires once' },
-] as const;
 
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -45,6 +53,8 @@ const frequencyKey = (f: Frequency) => `${f.unit}:${f.count}`;
 
 /** Warranty length shortcuts; picking one sets the end date from the purchase date. */
 const WARRANTY_YEARS = [1, 2, 3, 5] as const;
+
+const NO_ASSET = 'none';
 
 /** What happened to the receipt photo while the form was open. */
 export interface ReceiptChange {
@@ -58,6 +68,9 @@ interface ItemFormProps {
   initialReceipt?: PickedPhoto | null;
   /** Currency for a new item. Edits keep the item's own currency. */
   defaultCurrency?: string;
+  /** Category and vehicle or home for a new item, e.g. when adding from a vehicle's page. */
+  defaultCategory?: CategoryId;
+  defaultAssetId?: number;
   submitLabel: string;
   onSubmit: (input: ItemInput, receipt: ReceiptChange) => Promise<void>;
   /** Extra content shown above the fields, e.g. renewal status. */
@@ -66,24 +79,29 @@ interface ItemFormProps {
   footer?: ReactNode;
 }
 
-type Errors = Partial<Record<'name' | 'amount' | 'dueDate', string>>;
+type Errors = Partial<Record<'name' | 'amount' | 'dueDate' | 'usageInterval' | 'nextUsage', string>>;
 
 export function ItemForm({
   initial,
   initialReceipt = null,
   defaultCurrency,
+  defaultCategory,
+  defaultAssetId,
   submitLabel,
   onSubmit,
   header,
   footer,
 }: ItemFormProps) {
   const theme = useTheme();
+  const assetData = useAssets();
+  const assets = assetData?.assets ?? [];
   const currency = initial?.currency ?? defaultCurrency ?? DEFAULT_CURRENCY;
+  const startCategory = initial?.category ?? defaultCategory ?? 'subscription';
   const [name, setName] = useState(initial?.name ?? '');
   const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
-  const [category, setCategory] = useState<CategoryId>(initial?.category ?? 'subscription');
-  const [schedule, setSchedule] = useState<FormSchedule>(
-    initial?.scheduleType === 'expiry' ? 'expiry' : 'recurring',
+  const [category, setCategory] = useState<CategoryId>(startCategory);
+  const [schedule, setSchedule] = useState<ScheduleType>(
+    initial?.scheduleType ?? getCategory(startCategory).schedules[0],
   );
   const [amount, setAmount] = useState(
     initial?.amountCents != null ? centsToInput(initial.amountCents) : '',
@@ -95,6 +113,8 @@ export function ItemForm({
   );
   const [startDate, setStartDate] = useState<string | null>(initial?.startDate ?? null);
   const [dueDate, setDueDate] = useState<string | null>(initial?.dueDate ?? null);
+  // Whether a quick-add template filled in the due date, so another template may replace it.
+  const [dueDateFromTemplate, setDueDateFromTemplate] = useState(false);
   const [warrantyYears, setWarrantyYears] = useState<number | null>(() =>
     initial?.startDate && initial.dueDate
       ? (WARRANTY_YEARS.find((y) => addInterval(initial.startDate!, 'year', y) === initial.dueDate) ?? null)
@@ -106,17 +126,82 @@ export function ItemForm({
   const [status, setStatus] = useState<ItemStatus>(initial?.status ?? 'active');
   const [provider, setProvider] = useState(initial?.provider ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [assetId, setAssetId] = useState<number | null>(initial?.assetId ?? defaultAssetId ?? null);
+  const [usageInterval, setUsageInterval] = useState(
+    initial?.usageInterval != null ? String(initial.usageInterval) : '',
+  );
+  const [nextUsage, setNextUsage] = useState(initial?.nextUsage != null ? String(initial.nextUsage) : '');
+  // Once the user types the due reading, it's no longer filled in for them.
+  const [nextUsageEdited, setNextUsageEdited] = useState(initial?.nextUsage != null);
+  // A template's distance, applied once a vehicle is chosen and its unit is known.
+  const [pendingDistance, setPendingDistance] = useState<ItemTemplate['distance'] | null>(null);
+  // IDs of the vehicles and homes there were when the user went to add a new one.
+  const [assetsBeforeNew, setAssetsBeforeNew] = useState<number[] | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
 
   const recurring = schedule === 'recurring';
+  const repeats = schedule !== 'expiry';
   const categoryInfo = getCategory(category);
   const wording = categoryInfo.wording;
   // A start date (e.g. purchase date) only where the category has a name for it.
-  const showStartDate = !recurring && wording?.startDate != null;
-  const isWarranty = category === 'warranty' && !recurring;
-  const dueDateLabel = recurring ? 'Next renewal date' : (wording?.expires ?? 'Expiry date');
+  const showStartDate = schedule === 'expiry' && wording?.startDate != null;
+  const isWarranty = category === 'warranty' && schedule === 'expiry';
+  const dueDateLabel =
+    schedule === 'recurring'
+      ? 'Next renewal date'
+      : schedule === 'task'
+        ? 'Next due date'
+        : (wording?.expires ?? 'Expiry date');
   const providerLabel = wording?.provider ?? 'Company or store';
+
+  // Vehicles and homes this category's items can belong to.
+  const assetKinds: readonly AssetKind[] = categoryInfo.assets?.kinds ?? [];
+  const matchingAssets = assets.filter((a) => assetKinds.includes(a.kind));
+  const selectedAsset = matchingAssets.find((a) => a.id === assetId) ?? null;
+  const showAssets =
+    assetKinds.length > 0 && (categoryInfo.assets!.offerNew || matchingAssets.length > 0);
+  // Distances apply to a vehicle's tasks, in the vehicle's unit.
+  const vehicle = schedule === 'task' && selectedAsset?.kind === 'vehicle' ? selectedAsset : null;
+  const unit = vehicle?.usageUnit ?? 'km';
+  const vehicleUsage = vehicle ? assetData?.usage.get(vehicle.id) : undefined;
+
+  /** Fills in the due reading from the latest one, until the user types their own. */
+  const suggestNextUsage = (interval: number | null, asset: Asset | null) => {
+    const usage = asset ? assetData?.usage.get(asset.id) : undefined;
+    if (!nextUsageEdited && interval != null && usage) setNextUsage(String(usage.reading + interval));
+  };
+
+  /** For a vehicle's task: the distance a template suggested, and the reading it's due at. */
+  const fillDistance = (asset: Asset | null, forSchedule: ScheduleType) => {
+    if (asset?.kind !== 'vehicle' || forSchedule !== 'task') return;
+    let interval = parseDistanceInput(usageInterval);
+    if (interval == null && pendingDistance) {
+      interval = pendingDistance[asset.usageUnit ?? 'km'];
+      setUsageInterval(String(interval));
+    }
+    suggestNextUsage(interval, asset);
+  };
+
+  const selectAsset = (asset: Asset | null) => {
+    setAssetId(asset?.id ?? null);
+    fillDistance(asset, schedule);
+  };
+
+  // Back from adding a vehicle or home: choose the new one.
+  if (assetsBeforeNew && assetData) {
+    const created = assetData.assets.find((a) => !assetsBeforeNew.includes(a.id));
+    if (created) {
+      setAssetsBeforeNew(null);
+      selectAsset(created);
+    }
+  }
+
+  const addAsset = (kind: AssetKind) => {
+    if (!assetData) return;
+    setAssetsBeforeNew(assetData.assets.map((a) => a.id));
+    router.push({ pathname: '/asset/new', params: { kind } });
+  };
 
   const changeStartDate = (date: string) => {
     setStartDate(date);
@@ -124,6 +209,7 @@ export function ItemForm({
   };
   const changeDueDate = (date: string) => {
     setDueDate(date);
+    setDueDateFromTemplate(false);
     setWarrantyYears(null);
   };
   const chooseWarrantyYears = (years: number) => {
@@ -136,6 +222,14 @@ export function ItemForm({
     setReceipt(photo);
     setReceiptChanged(true);
   };
+  const changeUsageInterval = (text: string) => {
+    setUsageInterval(text);
+    suggestNextUsage(parseDistanceInput(text), vehicle);
+  };
+  const changeNextUsage = (text: string) => {
+    setNextUsage(text);
+    setNextUsageEdited(true);
+  };
 
   // Keep an unusual saved frequency selectable alongside the presets.
   const frequencyOptions = FREQUENCY_PRESETS.map((p) => ({ value: frequencyKey(p), label: p.label }));
@@ -143,13 +237,37 @@ export function ItemForm({
     frequencyOptions.push({ value: frequencyKey(frequency), label: frequencyLabel(frequency) });
   }
 
-  const chooseCategory = (id: CategoryId) => {
+  // The category's schedule types, plus a saved one it no longer offers.
+  const scheduleOptions = categoryInfo.schedules.map((value) => ({ value, label: SCHEDULE_LABELS[value] }));
+  if (!categoryInfo.schedules.includes(schedule)) {
+    scheduleOptions.push({ value: schedule, label: SCHEDULE_LABELS[schedule] });
+  }
+
+  /**
+   * Switches category. New items take the category's usual schedule, and the
+   * only vehicle or home there is when the category is about them. Returns
+   * the vehicle or home the item then belongs to.
+   */
+  const applyCategory = (id: CategoryId, nextSchedule: ScheduleType): Asset | null => {
     setCategory(id);
-    // New items follow the category's usual schedule; edits keep what the user chose.
-    if (!initial) {
-      const defaultSchedule = getCategory(id).defaultSchedule;
-      setSchedule(defaultSchedule === 'expiry' ? 'expiry' : 'recurring');
-    }
+    setSchedule(nextSchedule);
+    const info = getCategory(id);
+    const kinds = info.assets?.kinds ?? [];
+    const candidates = assets.filter((a) => kinds.includes(a.kind));
+    let asset = candidates.find((a) => a.id === assetId) ?? null;
+    if (!asset && !initial && info.assets?.offerNew && candidates.length === 1) asset = candidates[0];
+    setAssetId(asset?.id ?? null);
+    return asset;
+  };
+
+  const chooseCategory = (id: CategoryId) => {
+    const nextSchedule = initial ? schedule : getCategory(id).schedules[0];
+    fillDistance(applyCategory(id, nextSchedule), nextSchedule);
+  };
+
+  const chooseSchedule = (value: ScheduleType) => {
+    setSchedule(value);
+    fillDistance(selectedAsset, value);
   };
 
   // Quick-add: popular picks before typing, matches while typing. New items only.
@@ -163,15 +281,27 @@ export function ItemForm({
     const template = TEMPLATES.find((t) => t.name === templateName);
     if (!template) return;
     setName(template.name);
-    setCategory(template.category);
     setAppliedTemplate(template.name);
-    if (template.frequency) {
-      setSchedule('recurring');
-      setFrequency(template.frequency);
-      setAutoRenew(true);
+    const nextSchedule = templateSchedule(template);
+    if (template.frequency) setFrequency(template.frequency);
+    if (nextSchedule === 'recurring') setAutoRenew(template.autoRenew ?? true);
+    if (nextSchedule === 'task' && template.frequency && (!dueDate || dueDateFromTemplate)) {
+      // As if it was just done; the user can change the date.
+      setDueDate(addInterval(todayISO(), template.frequency.unit, template.frequency.count));
+      setDueDateFromTemplate(true);
+    }
+    if (nextSchedule === 'expiry' && template.warrantyYears) chooseWarrantyYears(template.warrantyYears);
+
+    const asset = applyCategory(template.category, nextSchedule);
+    // Kept for when a vehicle is chosen later, since the distance depends on its unit.
+    setPendingDistance(template.distance ?? null);
+    if (template.distance && asset?.kind === 'vehicle') {
+      const interval = template.distance[asset.usageUnit ?? 'km'];
+      setUsageInterval(String(interval));
+      suggestNextUsage(interval, asset);
     } else {
-      setSchedule('expiry');
-      chooseWarrantyYears(template.warrantyYears);
+      setUsageInterval('');
+      if (!nextUsageEdited) setNextUsage('');
     }
   };
 
@@ -184,17 +314,30 @@ export function ItemForm({
       if (amountCents == null) next.amount = 'Enter an amount like 15.99.';
     }
     if (!dueDate) {
-      next.dueDate = recurring
-        ? 'Choose the next renewal date.'
-        : isWarranty
-          ? 'Choose when the warranty ends.'
-          : 'Choose the expiry date.';
+      next.dueDate =
+        schedule === 'recurring'
+          ? 'Choose the next renewal date.'
+          : schedule === 'task'
+            ? 'Choose when it’s next due.'
+            : isWarranty
+              ? 'Choose when the warranty ends.'
+              : 'Choose the expiry date.';
     } else if (showStartDate && startDate && dueDate < startDate) {
       next.dueDate = `This is before the ${wording?.startDate?.toLowerCase() ?? 'start date'}.`;
+    }
+    let interval: number | null = null;
+    let dueAt: number | null = null;
+    if (vehicle && usageInterval.trim()) {
+      interval = parseDistanceInput(usageInterval);
+      if (interval == null || interval === 0) next.usageInterval = 'Enter a whole number, like 10000.';
+      dueAt = parseDistanceInput(nextUsage);
+      if (!nextUsage.trim()) next.nextUsage = 'Enter the odometer reading it’s due at.';
+      else if (dueAt == null) next.nextUsage = 'Enter a whole number, like 55000.';
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    const distance = vehicle != null && interval != null;
     setSaving(true);
     try {
       await onSubmit(
@@ -204,15 +347,19 @@ export function ItemForm({
           scheduleType: schedule,
           amountCents,
           currency,
-          intervalUnit: recurring ? frequency.unit : null,
-          intervalCount: recurring ? frequency.count : null,
+          intervalUnit: repeats ? frequency.unit : null,
+          intervalCount: repeats ? frequency.count : null,
           // Hidden fields keep what was saved before.
           startDate: showStartDate ? startDate : (initial?.startDate ?? null),
           dueDate,
+          usageInterval: distance ? interval : null,
+          usageUnit: distance ? unit : null,
+          nextUsage: distance ? dueAt : null,
           autoRenew: recurring && autoRenew,
           status,
           provider,
           notes,
+          assetId: showAssets ? (selectedAsset?.id ?? null) : null,
         },
         { photo: receipt, changed: receiptChanged },
       );
@@ -220,6 +367,13 @@ export function ItemForm({
       setSaving(false);
     }
   };
+
+  const costLabel =
+    schedule === 'recurring'
+      ? `Cost per renewal (${currency})`
+      : schedule === 'task'
+        ? `Cost each time (${currency}, optional)`
+        : `Price paid (${currency}, optional)`;
 
   return (
     <ScrollView
@@ -233,7 +387,7 @@ export function ItemForm({
           <TextField
             value={name}
             onChangeText={setName}
-            placeholder="Netflix, Costco, car insurance, laptop…"
+            placeholder="Netflix, car insurance, laptop, oil change…"
             accessibilityLabel="Name"
             autoFocus={!initial}
             returnKeyType="next"
@@ -265,38 +419,88 @@ export function ItemForm({
           />
         </FormField>
 
-        <FormField label="Type">
-          <ChipGroup
-            accessibilityLabel="Type"
-            options={SCHEDULE_OPTIONS}
-            value={schedule}
-            onChange={setSchedule}
-          />
-        </FormField>
+        {showAssets ? (
+          <FormField label={`${assetKindsLabel(assetKinds)} (optional)`}>
+            <ChipGroup
+              accessibilityLabel={assetKindsLabel(assetKinds)}
+              options={[
+                { value: NO_ASSET, label: 'None' },
+                ...matchingAssets.map((a) => ({
+                  value: String(a.id),
+                  label: a.name,
+                  color: ASSET_KINDS[a.kind].color,
+                })),
+              ]}
+              value={selectedAsset ? String(selectedAsset.id) : NO_ASSET}
+              onChange={(value) =>
+                selectAsset(value === NO_ASSET ? null : (assets.find((a) => String(a.id) === value) ?? null))
+              }
+            />
+            {categoryInfo.assets?.offerNew ? (
+              <ChipButtons
+                accessibilityLabel="Add"
+                options={assetKinds.map((kind) => ({
+                  value: kind,
+                  label: `+ New ${ASSET_KINDS[kind].label.toLowerCase()}`,
+                }))}
+                onPress={addAsset}
+              />
+            ) : null}
+          </FormField>
+        ) : null}
 
-        <FormField
-          label={recurring ? `Cost per renewal (${currency})` : `Price paid (${currency}, optional)`}
-          error={errors.amount}>
+        {scheduleOptions.length > 1 ? (
+          <FormField label="Type">
+            <ChipGroup
+              accessibilityLabel="Type"
+              options={scheduleOptions}
+              value={schedule}
+              onChange={chooseSchedule}
+            />
+            {schedule === 'task' ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                Mark it done, and the next date counts from that day.
+              </ThemedText>
+            ) : null}
+          </FormField>
+        ) : null}
+
+        <FormField label={costLabel} error={errors.amount}>
           <TextField
             value={amount}
             onChangeText={setAmount}
             placeholder="0.00"
             keyboardType="decimal-pad"
-            accessibilityLabel={recurring ? 'Cost per renewal' : 'Price paid'}
+            accessibilityLabel={costLabel.replace(/ \(.*\)$/, '')}
           />
         </FormField>
 
-        {recurring ? (
+        {repeats ? (
           <FormField label="How often">
             <ChipGroup
               accessibilityLabel="How often"
               options={frequencyOptions}
               value={frequencyKey(frequency)}
               onChange={(key) => {
-                const [unit, count] = key.split(':');
-                setFrequency({ unit: unit as Frequency['unit'], count: Number(count) });
+                const [unitName, count] = key.split(':');
+                setFrequency({ unit: unitName as Frequency['unit'], count: Number(count) });
               }}
             />
+          </FormField>
+        ) : null}
+
+        {vehicle ? (
+          <FormField label={`Or every (${unit}, optional)`} error={errors.usageInterval}>
+            <TextField
+              value={usageInterval}
+              onChangeText={changeUsageInterval}
+              placeholder={unit === 'mi' ? '5000' : '10000'}
+              keyboardType="number-pad"
+              accessibilityLabel={`Distance between services in ${unit}`}
+            />
+            <ThemedText type="small" themeColor="textSecondary">
+              Whichever comes first, the time or the distance.
+            </ThemedText>
           </FormField>
         ) : null}
 
@@ -328,6 +532,23 @@ export function ItemForm({
           <DateField value={dueDate} onChange={changeDueDate} accessibilityLabel={dueDateLabel} />
         </FormField>
 
+        {vehicle && usageInterval.trim() ? (
+          <FormField label={`Next due at (${unit})`} error={errors.nextUsage}>
+            <TextField
+              value={nextUsage}
+              onChangeText={changeNextUsage}
+              placeholder={vehicleUsage ? String(vehicleUsage.reading + (parseDistanceInput(usageInterval) ?? 0)) : ''}
+              keyboardType="number-pad"
+              accessibilityLabel={`Odometer reading it's next due at, in ${unit}`}
+            />
+            <ThemedText type="small" themeColor="textSecondary">
+              {vehicleUsage
+                ? `Odometer: ${formatDistance(vehicleUsage.reading, vehicleUsage.unit)} on ${formatDate(vehicleUsage.readingDate)}.`
+                : `${vehicle.name} has no odometer reading yet. Add one on its page.`}
+            </ThemedText>
+          </FormField>
+        ) : null}
+
         {recurring ? (
           <SwitchRow
             label="Renews automatically"
@@ -356,7 +577,7 @@ export function ItemForm({
           <TextField
             value={provider}
             onChangeText={setProvider}
-            placeholder={isWarranty ? 'Where you bought it' : 'Who you pay'}
+            placeholder={wording?.providerPlaceholder ?? 'Who you pay'}
             accessibilityLabel={providerLabel}
           />
         </FormField>
@@ -371,7 +592,7 @@ export function ItemForm({
           <TextField
             value={notes}
             onChangeText={setNotes}
-            placeholder="Plan, account email, cancellation steps…"
+            placeholder="Plan, account email, part numbers…"
             accessibilityLabel="Notes"
             multiline
             style={styles.notes}

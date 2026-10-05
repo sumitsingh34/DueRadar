@@ -1,5 +1,5 @@
-import { makeItem } from '@/domain/__fixtures__/items';
-import { matchesSearch } from '@/domain/search';
+import { makeAsset, makeItem } from '@/domain/__fixtures__/items';
+import { matchesAssetSearch, matchesSearch } from '@/domain/search';
 
 describe('matchesSearch', () => {
   const item = makeItem({
@@ -24,5 +24,19 @@ describe('matchesSearch', () => {
   it('needs every word to match', () => {
     expect(matchesSearch(item, 'car ins')).toBe(true);
     expect(matchesSearch(item, 'car netflix')).toBe(false);
+  });
+});
+
+describe('searching vehicles and homes', () => {
+  it('finds items by the vehicle or home they belong to', () => {
+    const oil = makeItem({ name: 'Oil change', category: 'vehicle' });
+    expect(matchesSearch(oil, 'civic oil', 'Honda Civic')).toBe(true);
+    expect(matchesSearch(oil, 'civic')).toBe(false);
+  });
+
+  it('finds vehicles and homes by name, plate number or notes', () => {
+    const car = makeAsset({ details: { plate: 'ABC-1234' }, notes: 'Blue' });
+    expect(['honda', 'abc', 'blue', ''].map((q) => matchesAssetSearch(car, q))).toEqual([true, true, true, true]);
+    expect(matchesAssetSearch(car, 'toyota')).toBe(false);
   });
 });

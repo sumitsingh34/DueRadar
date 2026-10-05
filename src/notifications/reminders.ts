@@ -4,9 +4,11 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
+import { listAssets, listReadings } from '@/db/assets';
 import { listItems } from '@/db/items';
 import { getSettings } from '@/db/settings';
 import { planReminders } from '@/domain/reminders';
+import { buildUsageMap } from '@/domain/usage';
 
 /** Web version: reminders.web.ts. */
 
@@ -54,7 +56,8 @@ async function replaceScheduled(db: SQLiteDatabase): Promise<number> {
   if (!settings.remindersEnabled || !permission.granted) return 0;
 
   await ensureChannel();
-  const planned = planReminders(await listItems(db), settings, new Date());
+  const [items, assets, readings] = await Promise.all([listItems(db), listAssets(db), listReadings(db)]);
+  const planned = planReminders(items, settings, new Date(), buildUsageMap(assets, readings));
   for (const reminder of planned) {
     await Notifications.scheduleNotificationAsync({
       content: { title: reminder.title, body: reminder.body, data: { itemId: reminder.itemId } },
@@ -92,7 +95,7 @@ export function useReminderTapNavigation(): void {
 async function ensureChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: 'Renewal reminders',
+    name: 'Due date reminders',
     importance: Notifications.AndroidImportance.HIGH,
   });
 }

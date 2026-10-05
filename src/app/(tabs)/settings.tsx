@@ -23,6 +23,7 @@ import {
   REMINDER_HOUR_OPTIONS,
   type AppSettings,
 } from '@/domain/settings';
+import { useAssets } from '@/hooks/use-assets';
 import { useItems } from '@/hooks/use-items';
 import { useSettings } from '@/hooks/use-settings';
 import {
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
   const db = useSQLiteContext();
   const settings = useSettings();
   const items = useItems();
+  const assetData = useAssets();
   const [permission, setPermission] = useState<ReminderPermission | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -61,7 +63,7 @@ export default function SettingsScreen() {
     }, []),
   );
 
-  if (!settings || !items) return <ThemedView style={styles.fill} />;
+  if (!settings || !items || !assetData) return <ThemedView style={styles.fill} />;
 
   const save = (patch: Partial<AppSettings>) => {
     updateSettings(db, patch).catch((error) => showMessage('Couldn’t save the setting', String(error)));
@@ -107,7 +109,9 @@ export default function SettingsScreen() {
     });
 
   const exportCsv = () =>
-    run(() => shareTextFile(`dueradar-${todayISO()}.csv`, itemsToCsv(items, todayISO()), 'text/csv'));
+    run(() =>
+      shareTextFile(`dueradar-${todayISO()}.csv`, itemsToCsv(items, todayISO(), assetData.assets), 'text/csv'),
+    );
 
   const restore = () =>
     run(async () => {
@@ -138,7 +142,7 @@ export default function SettingsScreen() {
     });
 
   const nextReminder =
-    permission === 'granted' ? planReminders(items, settings, new Date())[0] : undefined;
+    permission === 'granted' ? planReminders(items, settings, new Date(), assetData.usage)[0] : undefined;
 
   return (
     <TabScreen title="Settings" showAdd={false}>

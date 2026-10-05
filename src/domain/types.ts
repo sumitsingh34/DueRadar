@@ -3,20 +3,23 @@ import type { IntervalUnit } from './dates';
 
 /**
  * How an item's key date behaves:
- * - recurring: renews every interval (subscriptions, insurance, maintenance)
+ * - recurring: renews on a fixed schedule (subscriptions, insurance, registration)
+ * - task: due again a set time after it's done, and optionally after a distance
+ *   (an oil change every 6 months or 10,000 km)
  * - expiry: a single date that passes once (warranties, passports)
- * - usage: due after a usage amount, e.g. an oil change every 5,000 mi (V3)
  */
-export type ScheduleType = 'recurring' | 'expiry' | 'usage';
+export type ScheduleType = 'recurring' | 'task' | 'expiry';
 
 export type ItemStatus = 'active' | 'paused' | 'cancelled';
+
+export type DistanceUnit = 'km' | 'mi';
 
 export interface Item {
   id: number;
   name: string;
   category: CategoryId;
   scheduleType: ScheduleType;
-  /** Cost per renewal (recurring) or price paid (expiry), in cents. */
+  /** Cost per renewal or per time it's done, or the price paid (expiry), in cents. */
   amountCents: number | null;
   currency: string;
   intervalUnit: IntervalUnit | null;
@@ -24,21 +27,25 @@ export interface Item {
   startDate: string | null;
   /**
    * Recurring: the renewal date the user entered. Later renewals are computed
-   * from it. Expiry: the expiry date.
+   * from it. Task: when it's next due. Expiry: the expiry date.
    */
   dueDate: string | null;
+  /** Task: distance between services, e.g. 10000 (km). Needs a vehicle. */
   usageInterval: number | null;
-  usageUnit: string | null;
+  usageUnit: DistanceUnit | null;
+  /** Task: the odometer reading at which it's next due. */
   nextUsage: number | null;
   autoRenew: boolean;
   status: ItemStatus;
   /** Company, retailer or issuer. */
   provider: string | null;
   notes: string | null;
-  /** Category-specific fields, e.g. a vehicle's plate number (V3). */
+  /** Category-specific fields. */
   details: Record<string, unknown>;
-  /** Groups items under another, e.g. a car's registration and insurance. */
+  /** Not used yet. Reserved for grouping items under another item. */
   parentId: number | null;
+  /** The vehicle or home this item belongs to. */
+  assetId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,10 +62,14 @@ export type ItemInput = Pick<
   | 'intervalCount'
   | 'startDate'
   | 'dueDate'
+  | 'usageInterval'
+  | 'usageUnit'
+  | 'nextUsage'
   | 'autoRenew'
   | 'status'
   | 'provider'
   | 'notes'
+  | 'assetId'
 >;
 
 /** A file attached to an item, such as a receipt photo, stored in the app's own folder. */
@@ -78,4 +89,42 @@ export interface PricePoint {
   amountCents: number;
   currency: string;
   effectiveDate: string;
+}
+
+export type AssetKind = 'vehicle' | 'home';
+
+/** Something items can belong to, such as a car (with its odometer) or a home. */
+export interface Asset {
+  id: number;
+  name: string;
+  kind: AssetKind;
+  /** A vehicle's odometer unit. Null for homes. */
+  usageUnit: DistanceUnit | null;
+  /** Kind-specific fields, e.g. `{ plate: 'ABC-1234' }` for a vehicle. */
+  details: Record<string, unknown>;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AssetInput = Pick<Asset, 'name' | 'kind' | 'usageUnit' | 'details' | 'notes'>;
+
+/** An odometer reading for a vehicle. */
+export interface UsageReading {
+  id: number;
+  assetId: number;
+  reading: number;
+  date: string;
+}
+
+/** One time a task was done, or a renewal was confirmed. */
+export interface Completion {
+  id: number;
+  itemId: number;
+  date: string;
+  amountCents: number | null;
+  currency: string | null;
+  /** The odometer reading at the time, for vehicle tasks. */
+  usage: number | null;
+  note: string | null;
 }

@@ -1,16 +1,29 @@
 import type { CategoryId } from './categories';
 import type { Frequency } from './frequency';
+import type { DistanceUnit, ScheduleType } from './types';
 
 /**
- * Quick-add presets: either something that renews, or a product with a
- * warranty. Prices are left out on purpose: they differ by country and plan,
- * and they change often.
+ * Quick-add presets: something that renews, a task that repeats when done,
+ * or a product with a warranty. Prices are left out on purpose: they differ by
+ * country and plan, and they change often.
  */
-export type ItemTemplate =
-  | { name: string; category: CategoryId; frequency: Frequency; warrantyYears?: never }
-  | { name: string; category: 'warranty'; warrantyYears: number; frequency?: never };
+export interface ItemTemplate {
+  name: string;
+  category: CategoryId;
+  /** How often it renews or is done. One-time items have none. */
+  frequency?: Frequency;
+  /** Repeats a set time after it's done, instead of renewing on a fixed schedule. */
+  task?: true;
+  /** Vehicle tasks: the usual distance between services, in each unit. */
+  distance?: Readonly<Record<DistanceUnit, number>>;
+  /** A renewal you confirm yourself, such as a registration. Renewals are automatic otherwise. */
+  autoRenew?: false;
+  /** Warranties: the usual length in years. */
+  warrantyYears?: number;
+}
 
 const MONTHLY: Frequency = { unit: 'month', count: 1 };
+const QUARTERLY: Frequency = { unit: 'month', count: 3 };
 const HALF_YEARLY: Frequency = { unit: 'month', count: 6 };
 const YEARLY: Frequency = { unit: 'year', count: 1 };
 
@@ -72,6 +85,45 @@ export const TEMPLATES: readonly ItemTemplate[] = [
   { name: 'Smartwatch', category: 'warranty', warrantyYears: 1 },
   { name: 'Camera', category: 'warranty', warrantyYears: 1 },
   { name: 'Printer', category: 'warranty', warrantyYears: 1 },
+  // Home maintenance: common intervals, which the user can change.
+  { name: 'HVAC filter', category: 'maintenance', frequency: QUARTERLY, task: true },
+  { name: 'AC service', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Furnace service', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Pest control', category: 'maintenance', frequency: QUARTERLY, task: true },
+  { name: 'Water purifier service', category: 'maintenance', frequency: HALF_YEARLY, task: true },
+  { name: 'Water filter', category: 'maintenance', frequency: HALF_YEARLY, task: true },
+  { name: 'Water tank cleaning', category: 'maintenance', frequency: HALF_YEARLY, task: true },
+  { name: 'Smoke alarm batteries', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Gutter cleaning', category: 'maintenance', frequency: HALF_YEARLY, task: true },
+  { name: 'Water heater flush', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Chimney sweep', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Dryer vent cleaning', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Fire extinguisher check', category: 'maintenance', frequency: YEARLY, task: true },
+  { name: 'Septic tank pumping', category: 'maintenance', frequency: { unit: 'year', count: 3 }, task: true },
+  // Vehicles: whichever comes first, the time or the distance.
+  {
+    name: 'Oil change',
+    category: 'vehicle',
+    frequency: HALF_YEARLY,
+    task: true,
+    distance: { km: 10000, mi: 5000 },
+  },
+  {
+    name: 'Tire rotation',
+    category: 'vehicle',
+    frequency: HALF_YEARLY,
+    task: true,
+    distance: { km: 10000, mi: 6000 },
+  },
+  { name: 'Car service', category: 'vehicle', frequency: YEARLY, task: true, distance: { km: 15000, mi: 10000 } },
+  { name: 'Bike service', category: 'vehicle', frequency: QUARTERLY, task: true, distance: { km: 3000, mi: 2000 } },
+  { name: 'Brake check', category: 'vehicle', frequency: YEARLY, task: true, distance: { km: 20000, mi: 12000 } },
+  { name: 'Wheel alignment', category: 'vehicle', frequency: YEARLY, task: true, distance: { km: 10000, mi: 6000 } },
+  { name: 'Battery check', category: 'vehicle', frequency: YEARLY, task: true },
+  { name: 'Wiper blades', category: 'vehicle', frequency: YEARLY, task: true },
+  { name: 'Emissions test', category: 'vehicle', frequency: YEARLY, task: true },
+  { name: 'Vehicle registration', category: 'vehicle', frequency: YEARLY, autoRenew: false },
+  { name: 'Vehicle inspection', category: 'vehicle', frequency: YEARLY, autoRenew: false },
 ];
 
 /** Shown before the user types anything. */
@@ -85,7 +137,15 @@ export const POPULAR_TEMPLATES: readonly ItemTemplate[] = [
   'Car insurance',
   'Gym membership',
   'Laptop',
+  'Oil change',
+  'AC service',
 ].map((name) => TEMPLATES.find((t) => t.name === name)!);
+
+/** The kind of schedule a template sets up. */
+export function templateSchedule(template: ItemTemplate): ScheduleType {
+  if (!template.frequency) return 'expiry';
+  return template.task ? 'task' : 'recurring';
+}
 
 /** Templates matching what the user typed, best match first. */
 export function findTemplates(query: string, limit = 5): ItemTemplate[] {

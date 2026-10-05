@@ -5,10 +5,10 @@ permalink: /privacy/
 
 # DueRadar privacy policy
 
-_Last updated: October 3, 2026_
+_Last updated: October 5, 2026_
 
-DueRadar is a free, open-source app for keeping track of subscriptions, renewals, warranties and
-expiry dates. It is designed to work without collecting anything about you.
+DueRadar is a free, open-source app for keeping track of subscriptions, renewals, warranties,
+home and car maintenance, and expiry dates. It is designed to work without collecting anything about you.
 
 ## In short
 
@@ -18,7 +18,8 @@ expiry dates. It is designed to work without collecting anything about you.
 
 ## What the app stores
 
-The items you add (names, costs, dates, companies and notes), their price history and your
+The items you add (names, costs, dates, companies and notes), their price history, the vehicles
+and homes you add with their odometer readings, a history of when you did each task, and your
 settings are saved in a database on your device. Receipt photos you add are copied into the app's
 private storage on your device. None of this is uploaded anywhere. Uninstalling the app deletes it.
 

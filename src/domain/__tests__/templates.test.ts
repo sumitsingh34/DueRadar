@@ -1,5 +1,5 @@
-import { AVAILABLE_CATEGORIES } from '@/domain/categories';
-import { findTemplates, POPULAR_TEMPLATES, TEMPLATES } from '@/domain/templates';
+import { AVAILABLE_CATEGORIES, getCategory } from '@/domain/categories';
+import { findTemplates, POPULAR_TEMPLATES, templateSchedule, TEMPLATES } from '@/domain/templates';
 
 describe('findTemplates', () => {
   const names = (query: string) => findTemplates(query).map((t) => t.name);
@@ -32,7 +32,7 @@ describe('templates', () => {
     expect(POPULAR_TEMPLATES.every(Boolean)).toBe(true);
   });
 
-  it('are either something that renews or a product with a warranty', () => {
+  it('are either something that renews, a task, or a product with a warranty', () => {
     for (const template of TEMPLATES) {
       if (template.category === 'warranty') {
         expect(template.warrantyYears).toBeGreaterThan(0);
@@ -42,5 +42,21 @@ describe('templates', () => {
       }
     }
     expect(findTemplates('lap')).toEqual([{ name: 'Laptop', category: 'warranty', warrantyYears: 1 }]);
+  });
+
+  it('use a schedule their category offers', () => {
+    for (const template of TEMPLATES) {
+      expect(getCategory(template.category).schedules).toContain(templateSchedule(template));
+    }
+    expect(templateSchedule(TEMPLATES.find((t) => t.name === 'Oil change')!)).toBe('task');
+    expect(templateSchedule(TEMPLATES.find((t) => t.name === 'Vehicle registration')!)).toBe('recurring');
+  });
+
+  it('only give distances to vehicle tasks, in both units', () => {
+    for (const template of TEMPLATES.filter((t) => t.distance)) {
+      expect(template.task).toBe(true);
+      expect(getCategory(template.category).assets?.kinds).toContain('vehicle');
+      expect(template.distance!.km).toBeGreaterThan(template.distance!.mi);
+    }
   });
 });

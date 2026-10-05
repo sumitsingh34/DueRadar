@@ -1,13 +1,26 @@
-import { CATEGORIES, getCategory, type CategoryId } from './categories';
+import { CATEGORIES, getCategory, SCHEDULE_LABELS, type CategoryId } from './categories';
 import { isISODate, type IntervalUnit } from './dates';
 import { frequencyLabel } from './frequency';
 import { monthlyEquivalentCents } from './money';
 import { normalizeSettings, type AppSettings } from './settings';
-import { nextDueDate } from './summary';
-import type { Item, ItemStatus, PricePoint, ScheduleType } from './types';
+import { hasInterval, nextDueDate } from './summary';
+import type {
+  Asset,
+  AssetKind,
+  Completion,
+  DistanceUnit,
+  Item,
+  ItemStatus,
+  PricePoint,
+  ScheduleType,
+  UsageReading,
+} from './types';
 
-/** Format 2 added receipt photos. Format 1 backups are still accepted. */
-export const BACKUP_FORMAT = 2;
+/**
+ * Format 2 added receipt photos. Format 3 added vehicles and homes, odometer
+ * readings and task history. Older backups are still accepted.
+ */
+export const BACKUP_FORMAT = 3;
 
 /** A receipt photo in a backup, with the file itself as base64. */
 export interface BackupAttachment {
@@ -29,7 +42,12 @@ export interface Backup {
   items: Item[];
   priceHistory: Omit<PricePoint, 'id'>[];
   attachments: BackupAttachment[];
+  assets: Asset[];
+  usageReadings: Omit<UsageReading, 'id'>[];
+  completions: Omit<Completion, 'id'>[];
 }
+
+export type BackupContents = Omit<Backup, 'app' | 'format' | 'exportedAt'>;
 
 export class BackupError extends Error {}
 
@@ -37,21 +55,12 @@ export class BackupError extends Error {}
 const SAFE_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
-export function createBackup(
-  items: Item[],
-  priceHistory: Omit<PricePoint, 'id'>[],
-  settings: AppSettings,
-  attachments: BackupAttachment[] = [],
-  now = new Date(),
-): Backup {
+export function createBackup(contents: BackupContents, now = new Date()): Backup {
   return {
     app: 'DueRadar',
     format: BACKUP_FORMAT,
     exportedAt: now.toISOString(),
-    settings,
-    items,
-    priceHistory,
-    attachments,
+    ...contents,
   };
 }
 
@@ -70,12 +79,19 @@ export function parseBackup(text: string): Backup {
     throw new BackupError('This backup was made by a newer version of DueRadar. Update the app first.');
   }
 
+  // Vehicles and homes that are damaged are left out; their items are kept without them.
+  const assets: Asset[] = [];
+  for (const raw of listOf(data.assets)) {
+    const asset = parseAsset(raw);
+    if (asset && !assets.some((a) => a.id === asset.id)) assets.push(asset);
+  }
+  const assetIds = new Set(assets.map((a) => a.id));
+
   const items = data.items.map((raw, index) => parseItem(raw, index));
   const ids = new Set(items.map((item) => item.id));
   if (ids.size !== items.length) throw new BackupError('The backup contains duplicate items.');
 
-  const priceHistory = (Array.isArray(data.priceHistory) ? data.priceHistory : [])
-    .filter(isRecord)
+  const priceHistory = listOf(data.priceHistory)
     .filter(
       (p) =>
         typeof p.itemId === 'number' &&
@@ -91,12 +107,33 @@ export function parseBackup(text: string): Backup {
       effectiveDate: p.effectiveDate as string,
     }));
 
+  const usageReadings = listOf(data.usageReadings)
+    .filter(
+      (r) =>
+        typeof r.assetId === 'number' &&
+        assetIds.has(r.assetId) &&
+        isCents(r.reading) &&
+        typeof r.date === 'string' &&
+        isISODate(r.date),
+    )
+    .map((r) => ({ assetId: r.assetId as number, reading: r.reading as number, date: r.date as string }));
+
+  const completions = listOf(data.completions)
+    .filter((c) => typeof c.itemId === 'number' && ids.has(c.itemId) && optionalDate(c.date) !== null)
+    .map((c) => ({
+      itemId: c.itemId as number,
+      date: c.date as string,
+      amountCents: isCents(c.amountCents) ? c.amountCents : null,
+      currency: isCurrency(c.currency) ? c.currency : null,
+      usage: isCents(c.usage) ? c.usage : null,
+      note: optionalText(c.note),
+    }));
+
   // Receipts with an unsafe file name, bad data or a missing item are skipped.
   const fileNames = new Set<string>();
   const attachments: BackupAttachment[] = [];
-  for (const a of Array.isArray(data.attachments) ? data.attachments : []) {
+  for (const a of listOf(data.attachments)) {
     if (
-      !isRecord(a) ||
       typeof a.itemId !== 'number' ||
       !ids.has(a.itemId) ||
       a.kind !== 'receipt' ||
@@ -124,13 +161,17 @@ export function parseBackup(text: string): Backup {
     format: data.format,
     exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : '',
     settings: normalizeSettings(isRecord(data.settings) ? data.settings : {}),
-    // Drop links to items that are not in the backup.
+    // Drop links to items, vehicles or homes that are not in the backup.
     items: items.map((item) => ({
       ...item,
       parentId: item.parentId != null && ids.has(item.parentId) ? item.parentId : null,
+      assetId: item.assetId != null && assetIds.has(item.assetId) ? item.assetId : null,
     })),
     priceHistory,
     attachments,
+    assets,
+    usageReadings,
+    completions,
   };
 }
 
@@ -148,23 +189,25 @@ const CSV_HEADER = [
   'Company',
   'Notes',
   'Monthly cost',
+  'Vehicle or home',
+  'Distance interval',
+  'Next due at',
 ];
 
 /** A spreadsheet-friendly export. The JSON backup is the one to restore from. */
-export function itemsToCsv(items: readonly Item[], today: string): string {
+export function itemsToCsv(items: readonly Item[], today: string, assets: readonly Asset[] = []): string {
+  const assetNames = new Map(assets.map((a) => [a.id, a.name]));
   const rows = items.map((item) => {
-    const frequency =
-      item.scheduleType === 'recurring' && item.intervalUnit && item.intervalCount
-        ? { unit: item.intervalUnit, count: item.intervalCount }
-        : null;
+    const frequency = hasInterval(item) ? { unit: item.intervalUnit, count: item.intervalCount } : null;
     const monthly =
       frequency && item.amountCents != null && item.status === 'active'
         ? (monthlyEquivalentCents(item.amountCents, frequency.unit, frequency.count) / 100).toFixed(2)
         : '';
+    const unit = item.usageUnit ? ` ${item.usageUnit}` : '';
     return [
       item.name,
       getCategory(item.category).label,
-      item.scheduleType === 'expiry' ? 'Expires' : 'Renews',
+      item.scheduleType === 'expiry' ? 'Expires' : SCHEDULE_LABELS[item.scheduleType],
       item.amountCents != null ? (item.amountCents / 100).toFixed(2) : '',
       item.currency,
       frequency ? frequencyLabel(frequency) : '',
@@ -175,6 +218,9 @@ export function itemsToCsv(items: readonly Item[], today: string): string {
       item.provider ?? '',
       item.notes ?? '',
       monthly,
+      (item.assetId != null && assetNames.get(item.assetId)) || '',
+      item.usageInterval != null ? `${item.usageInterval}${unit}` : '',
+      item.nextUsage != null ? `${item.nextUsage}${unit}` : '',
     ];
   });
   // The byte-order mark makes Excel read the file as UTF-8 (₹, €, etc.).
@@ -189,9 +235,10 @@ function parseItem(raw: unknown, index: number): Item {
 
   const id = raw.id;
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
-  const scheduleType = raw.scheduleType;
+  // "usage" was the name for tasks before format 3, though no version created them.
+  const scheduleType = raw.scheduleType === 'usage' ? 'task' : raw.scheduleType;
   if (!Number.isInteger(id) || (id as number) <= 0 || !name) return fail();
-  if (scheduleType !== 'recurring' && scheduleType !== 'expiry' && scheduleType !== 'usage') return fail();
+  if (scheduleType !== 'recurring' && scheduleType !== 'expiry' && scheduleType !== 'task') return fail();
 
   const intervalUnit = ['day', 'week', 'month', 'year'].includes(raw.intervalUnit as string)
     ? (raw.intervalUnit as IntervalUnit)
@@ -210,8 +257,8 @@ function parseItem(raw: unknown, index: number): Item {
     startDate: optionalDate(raw.startDate),
     dueDate: optionalDate(raw.dueDate),
     usageInterval: isPositiveInt(raw.usageInterval) ? raw.usageInterval : null,
-    usageUnit: typeof raw.usageUnit === 'string' ? raw.usageUnit : null,
-    nextUsage: isPositiveInt(raw.nextUsage) ? raw.nextUsage : null,
+    usageUnit: isDistanceUnit(raw.usageUnit) ? raw.usageUnit : null,
+    nextUsage: isCents(raw.nextUsage) ? raw.nextUsage : null,
     autoRenew: raw.autoRenew === true,
     status: (['active', 'paused', 'cancelled'] as const).includes(raw.status as ItemStatus)
       ? (raw.status as ItemStatus)
@@ -220,6 +267,23 @@ function parseItem(raw: unknown, index: number): Item {
     notes: optionalText(raw.notes),
     details: isRecord(raw.details) ? raw.details : {},
     parentId: isPositiveInt(raw.parentId) ? raw.parentId : null,
+    assetId: isPositiveInt(raw.assetId) ? raw.assetId : null,
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+  };
+}
+
+function parseAsset(raw: Record<string, unknown>): Asset | null {
+  const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+  const kind = raw.kind === 'vehicle' || raw.kind === 'home' ? (raw.kind as AssetKind) : null;
+  if (!isPositiveInt(raw.id) || !name || !kind) return null;
+  return {
+    id: raw.id,
+    name,
+    kind,
+    usageUnit: kind === 'vehicle' ? (isDistanceUnit(raw.usageUnit) ? raw.usageUnit : 'km') : null,
+    details: isRecord(raw.details) ? raw.details : {},
+    notes: optionalText(raw.notes),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString(),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
   };
@@ -227,6 +291,11 @@ function parseItem(raw: unknown, index: number): Item {
 
 function csvCell(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** The records in an optional array, skipping anything else. */
+function listOf(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -243,6 +312,10 @@ function isCents(value: unknown): value is number {
 
 function isCurrency(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Z]{3}$/.test(value);
+}
+
+function isDistanceUnit(value: unknown): value is DistanceUnit {
+  return value === 'km' || value === 'mi';
 }
 
 function optionalDate(value: unknown): string | null {

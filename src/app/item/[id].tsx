@@ -1,57 +1,88 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { PickedPhoto } from '@/attachments/pick';
 import { attachmentUri } from '@/attachments/storage';
 import { Button } from '@/components/form-controls';
+import { Icon } from '@/components/icon';
 import { ItemForm } from '@/components/item-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { getReceipt, setReceipt } from '@/db/attachments';
-import { deleteItem, getItem, getPriceHistory, setDueDate, updateItem } from '@/db/items';
-import { addInterval, formatDate, todayISO } from '@/domain/dates';
+import { onDataChanged } from '@/db/events';
+import {
+  deleteItem,
+  getItem,
+  getPriceHistory,
+  listCompletions,
+  markRenewed,
+  updateItem,
+} from '@/db/items';
+import { ASSET_KINDS } from '@/domain/assets';
+import { formatDate, todayISO } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { dueLabel, toDueItem } from '@/domain/summary';
-import type { Item, PricePoint } from '@/domain/types';
+import type { Completion, Item, PricePoint } from '@/domain/types';
+import { formatDistance } from '@/domain/usage';
+import { useAssets } from '@/hooks/use-assets';
+import { useTheme } from '@/hooks/use-theme';
 import { confirmAsync, showMessage } from '@/utils/confirm';
 import { goBack } from '@/utils/navigation';
 
 /** Manual renewals can be confirmed this many days before they are due. */
 const RENEW_WINDOW_DAYS = 30;
+/** History entries shown; older ones are counted. */
+const HISTORY_SHOWN = 5;
+
+interface Loaded {
+  item: Item | null;
+  history: PricePoint[];
+  completions: Completion[];
+  receipt: PickedPhoto | null;
+}
 
 export default function EditItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const db = useSQLiteContext();
-  // undefined while loading, null when the item does not exist.
-  const [item, setItem] = useState<Item | null | undefined>(undefined);
-  const [history, setHistory] = useState<PricePoint[]>([]);
-  const [receipt, setReceiptPhoto] = useState<PickedPhoto | null>(null);
-  // Bumped to reload the item after it changes on this screen.
-  const [version, setVersion] = useState(0);
+  const theme = useTheme();
+  const assetData = useAssets();
+  // Undefined while loading.
+  const [loaded, setLoaded] = useState<Loaded | undefined>(undefined);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const found = await getItem(db, Number(id));
-      const prices = found ? await getPriceHistory(db, found.id) : [];
-      const attachment = found ? await getReceipt(db, found.id) : null;
-      if (active) {
-        setItem(found);
-        setHistory(prices);
-        setReceiptPhoto(
-          attachment ? { uri: attachmentUri(attachment.path), mimeType: attachment.mimeType } : null,
-        );
-      }
-    })().catch((error) => console.error('Failed to load item', error));
-    return () => {
-      active = false;
-    };
-  }, [db, id, version]);
+  // Reloads when the screen comes back into focus, e.g. after "Mark as done".
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const load = async () => {
+        const item = await getItem(db, Number(id));
+        const [history, completions, attachment] = item
+          ? await Promise.all([getPriceHistory(db, item.id), listCompletions(db, item.id), getReceipt(db, item.id)])
+          : [[], [], null];
+        if (!active) return;
+        setLoaded({
+          item,
+          history,
+          completions,
+          receipt: attachment ? { uri: attachmentUri(attachment.path), mimeType: attachment.mimeType } : null,
+        });
+      };
+      const reload = () => {
+        load().catch((error) => console.error('Failed to load item', error));
+      };
+      reload();
+      const unsubscribe = onDataChanged(reload);
+      return () => {
+        active = false;
+        unsubscribe();
+      };
+    }, [db, id]),
+  );
 
-  if (item === undefined) return <ThemedView style={styles.fill} />;
+  if (loaded === undefined) return <ThemedView style={styles.fill} />;
+  const { item, history, completions, receipt } = loaded;
 
   if (item === null) {
     return (
@@ -63,9 +94,12 @@ export default function EditItemScreen() {
     );
   }
 
-  const due = toDueItem(item, todayISO());
+  const asset = assetData?.assets.find((a) => a.id === item.assetId) ?? null;
+  const usage = asset ? assetData?.usage.get(asset.id) : undefined;
+  const due = toDueItem(item, todayISO(), assetData?.usage);
+  const active = item.status === 'active';
   const canMarkRenewed =
-    item.status === 'active' &&
+    active &&
     item.scheduleType === 'recurring' &&
     !item.autoRenew &&
     item.dueDate != null &&
@@ -73,17 +107,12 @@ export default function EditItemScreen() {
     item.intervalCount != null &&
     due != null &&
     due.daysUntil <= RENEW_WINDOW_DAYS;
-
-  const markRenewed = async () => {
-    if (!item.dueDate || !item.intervalUnit || !item.intervalCount) return;
-    await setDueDate(db, item.id, addInterval(item.dueDate, item.intervalUnit, item.intervalCount));
-    setVersion((v) => v + 1);
-  };
+  const canMarkDone = active && item.scheduleType === 'task';
 
   const remove = async () => {
     const confirmed = await confirmAsync(
       `Delete ${item.name}?`,
-      'Its price history and any receipt will be deleted too. This can’t be undone.',
+      'Its history and any receipt will be deleted too. This can’t be undone.',
       'Delete',
     );
     if (!confirmed) return;
@@ -91,36 +120,107 @@ export default function EditItemScreen() {
     goBack();
   };
 
-  const header =
-    due || history.length > 1 ? (
-      <ThemedView type="backgroundElement" style={styles.card}>
-        {due && item.status === 'active' ? (
-          <ThemedText themeColor={due.daysUntil < 0 ? 'danger' : 'text'}>
-            {dueLabel(due)} · {formatDate(due.dueDate)}
+  const distanceUnit = item.usageUnit ?? asset?.usageUnit ?? null;
+  const historyLine = (c: Completion) =>
+    [
+      formatDate(c.date),
+      c.usage != null && distanceUnit ? formatDistance(c.usage, distanceUnit) : null,
+      c.amountCents != null ? formatMoney(c.amountCents, c.currency ?? item.currency) : null,
+      c.note,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+  const showCard =
+    (due && active) || history.length > 1 || completions.length > 0 || asset || canMarkDone;
+  const header = showCard ? (
+    <ThemedView type="backgroundElement" style={styles.card}>
+      {due && active ? (
+        <View style={styles.block}>
+          <ThemedText themeColor={due.overdue ? 'danger' : 'text'}>
+            {dueLabel(due)} · {due.estimated ? 'around ' : ''}
+            {formatDate(due.dueDate)}
           </ThemedText>
-        ) : null}
-        {history.length > 1 ? (
-          <View style={styles.history}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Price history
-            </ThemedText>
-            <ThemedText>
-              {history.map((p) => formatMoney(p.amountCents, p.currency)).join(' → ')}
-            </ThemedText>
+          {due.distance ? (
             <ThemedText type="small" themeColor="textSecondary">
-              Since {formatDate(history[0].effectiveDate)}
+              Due at {formatDistance(due.distance.target, due.distance.unit)}
+              {usage ? ` · odometer ${formatDistance(usage.reading, usage.unit)} on ${formatDate(usage.readingDate)}` : ''}
             </ThemedText>
-          </View>
-        ) : null}
-        {canMarkRenewed ? <Button title="Mark as renewed" onPress={markRenewed} /> : null}
-      </ThemedView>
-    ) : null;
+          ) : item.nextUsage != null && item.usageUnit && asset ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Due at {formatDistance(item.nextUsage, item.usageUnit)}. Add an odometer reading to {asset.name} to
+              track it.
+            </ThemedText>
+          ) : null}
+        </View>
+      ) : null}
+
+      {asset ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Open ${asset.name}`}
+          onPress={() => router.push({ pathname: '/asset/[id]', params: { id: String(asset.id) } })}
+          style={({ pressed }) => [styles.assetLink, pressed && styles.pressed]}>
+          <Icon name={asset.kind} color={ASSET_KINDS[asset.kind].color} size={18} />
+          <ThemedText type="smallBold" style={styles.assetName}>
+            {asset.name}
+          </ThemedText>
+          <Icon name="chevron" color={theme.textSecondary} size={16} />
+        </Pressable>
+      ) : null}
+
+      {history.length > 1 ? (
+        <View style={styles.block}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            Price history
+          </ThemedText>
+          <ThemedText>{history.map((p) => formatMoney(p.amountCents, p.currency)).join(' → ')}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Since {formatDate(history[0].effectiveDate)}
+          </ThemedText>
+        </View>
+      ) : null}
+
+      {completions.length > 0 ? (
+        <View style={styles.block}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            {item.scheduleType === 'task' ? 'Done' : 'Renewed'}
+          </ThemedText>
+          {completions.slice(0, HISTORY_SHOWN).map((c) => (
+            <ThemedText key={c.id} type="small">
+              {historyLine(c)}
+            </ThemedText>
+          ))}
+          {completions.length > HISTORY_SHOWN ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              and {completions.length - HISTORY_SHOWN} more
+            </ThemedText>
+          ) : null}
+        </View>
+      ) : null}
+
+      {canMarkDone ? (
+        <Button
+          title="Mark as done"
+          onPress={() => router.push({ pathname: '/item/done/[id]', params: { id: String(item.id) } })}
+        />
+      ) : null}
+      {canMarkRenewed ? (
+        <Button
+          title="Mark as renewed"
+          onPress={() => {
+            markRenewed(db, item).catch((error) => showMessage('Couldn’t save', String(error)));
+          }}
+        />
+      ) : null}
+    </ThemedView>
+  ) : null;
 
   return (
     <>
       <Stack.Screen options={{ title: item.name }} />
       <ItemForm
-        // Remount with fresh values after "Mark as renewed" changes the item.
+        // Remount with fresh values after the item changes, e.g. "Mark as renewed".
         key={item.updatedAt}
         initial={item}
         initialReceipt={receipt}
@@ -158,7 +258,18 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.three,
   },
-  history: {
+  block: {
     gap: Spacing.half,
+  },
+  assetLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  assetName: {
+    flexShrink: 1,
+  },
+  pressed: {
+    opacity: 0.6,
   },
 });

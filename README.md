@@ -4,7 +4,7 @@
 
 See what's coming before it's due.
 
-DueRadar is a free, open-source app that makes sure you never miss a renewal, price increase or expiry. It tracks what you pay for again and again (subscriptions, memberships, insurance, phone plans, domains, card annual fees) and the dates that matter.
+DueRadar is a free, open-source app that makes sure you never miss a renewal, price increase or expiry. It tracks what you pay for again and again (subscriptions, memberships, insurance, phone plans, domains, card annual fees), the upkeep of your home and car, and the dates that matter.
 
 **Private by design:** there are no accounts and no server, and nothing to sign up for. Your data is stored in a SQLite database on your own device and never leaves it.
 
@@ -24,20 +24,22 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 Working now:
 
 - Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag
-- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (50+ common services and products)
+- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (80+ common services, products and maintenance tasks)
 - Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
 - Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
 - Price history: every cost change is recorded (for example $55 → $65 → $80), and the Overview lists the items whose price went up
 - All items: search by name, company, category or notes, with edit and delete on every row
 - Warranties: purchase date, price, store, warranty length (1, 2, 3 or 5 years sets the end date) and a photo of the receipt, with reminders before the warranty ends
+- Home and vehicle maintenance: tasks that repeat when done, like an HVAC filter every 3 months or an oil change every 6 months or 10,000 km. Mark a task done and its next date counts from that day. Each time is kept in its history, with the cost and odometer reading
+- Vehicles and homes: group items under your car or home, keep the odometer up to date, and see services due by distance. From a few readings, DueRadar estimates when a distance will be reached and reminds you before then
 - Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. A reminder longer than the billing period is skipped
-- Backup: export a JSON backup (including receipt photos) or a CSV spreadsheet, and restore from a backup on a new phone
+- Backup: export a JSON backup (including receipt photos, vehicles and history) or a CSV spreadsheet, and restore from a backup on a new phone
 - Your currency for new items (USD, EUR, GBP, INR and more)
 - Light and dark mode. Runs on iOS, Android and the web (reminders need the phone app)
 
 Planned:
 
-- Home and vehicle maintenance (V3), licenses and life admin (V4), and an optional encrypted document vault (V5)
+- Licenses and life admin (V4), and an optional encrypted document vault (V5)
 
 ## Tech stack
 
@@ -49,7 +51,7 @@ Planned:
 | Reminders  | `expo-notifications`, scheduled locally on the device       |
 | Backup     | `expo-file-system`, `expo-sharing`, `expo-document-picker`  |
 | Receipts   | `expo-image-picker` (camera or photo library), stored in the app's own folder |
-| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search and price insights |
+| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search, price insights, tasks and distances |
 
 ## Project structure
 
@@ -57,7 +59,8 @@ Planned:
 src/
   app/            Screens (Expo Router). Every file is a route.
     (tabs)/       Overview, All items and Settings tabs
-    item/         Add item (modal) and Edit item screens
+    item/         Add item (modal), Edit item and Mark as done screens
+    asset/        Add or edit a vehicle or home, with its odometer and items
   components/     UI building blocks (form controls, item row, date field)
   db/             SQLite migrations, queries, settings and backup restore
   domain/         Pure logic with no React or database: dates, money, schedules,
@@ -74,15 +77,24 @@ scripts/          Icon generator (make-icons.js)
 
 Everything you track is an **item** with a key date. One shared table covers the whole roadmap, so later versions add categories and fields, not new apps.
 
-| Table           | Purpose                                                                                           |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| `items`         | Name, category, cost, schedule (`recurring`, `expiry` or `usage`), due date, status, optional parent item |
-| `price_history` | Each price an item has had, with the date it took effect                                          |
-| `reminders`     | Per-item reminder offsets and their scheduled notification IDs                                    |
-| `attachments`   | Receipt photos (and later, documents) stored in the app's private storage                        |
-| `settings`      | App preferences, such as the default currency                                                     |
+| Table            | Purpose                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `items`          | Name, category, cost, schedule, due date (and for vehicle tasks, distance), status, and the vehicle or home it belongs to |
+| `price_history`  | Each price an item has had, with the date it took effect                                          |
+| `completions`    | Each time a task was done or a renewal confirmed, with the cost, odometer reading and a note      |
+| `assets`         | Vehicles and homes that items can belong to, with a vehicle's odometer unit                       |
+| `usage_readings` | Odometer readings of each vehicle                                                                 |
+| `reminders`      | Reserved for per-item reminder settings                                                           |
+| `attachments`    | Receipt photos (and later, documents) stored in the app's private storage                        |
+| `settings`       | App preferences, such as the default currency                                                     |
 
-Dates are stored as local `YYYY-MM-DD` strings and amounts as integer cents. A repeating date is always computed from the date you entered, so a bill on the 31st comes back to the 31st after a short month instead of drifting to the 28th.
+An item's schedule is one of:
+
+- `recurring`: renews on a fixed schedule, like a subscription. Its next date is always computed from the date you entered, so a bill on the 31st comes back to the 31st after a short month instead of drifting to the 28th.
+- `task`: repeats a set time after it's done, like an HVAC filter. Marking it done moves the next date to that day plus the interval. A vehicle's task can also be due by distance (whichever comes first), and the average distance per day from recent odometer readings estimates when that will be.
+- `expiry`: a single date, like a warranty or passport.
+
+Dates are stored as local `YYYY-MM-DD` strings and amounts as integer cents.
 
 ## Getting started
 

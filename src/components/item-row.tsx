@@ -25,10 +25,13 @@ export function ItemRow({
   item,
   due,
   showActions = false,
+  assetName,
 }: {
   item: Item;
   due: DueItem | null;
   showActions?: boolean;
+  /** The vehicle or home it belongs to, shown under the date. */
+  assetName?: string | null;
 }) {
   const theme = useTheme();
   const db = useSQLiteContext();
@@ -36,12 +39,14 @@ export function ItemRow({
   const statusLabel = STATUS_LABELS[item.status];
   const subtitle =
     statusLabel ??
-    (due ? `${dueLabel(due)} · ${formatShortDate(due.dueDate, todayISO())}` : 'No date set');
+    (due
+      ? `${dueLabel(due)} · ${due.estimated ? '≈ ' : ''}${formatShortDate(due.dueDate, todayISO())}`
+      : 'No date set');
 
   let price: string | null = null;
   if (item.amountCents != null) {
     price = formatMoney(item.amountCents, item.currency);
-    if (item.scheduleType === 'recurring' && item.intervalUnit && item.intervalCount) {
+    if (item.scheduleType !== 'expiry' && item.intervalUnit && item.intervalCount) {
       price += costSuffix({ unit: item.intervalUnit, count: item.intervalCount });
     }
   }
@@ -52,7 +57,7 @@ export function ItemRow({
   const remove = async () => {
     const confirmed = await confirmAsync(
       `Delete ${item.name}?`,
-      'Its price history and any receipt will be deleted too. This can’t be undone.',
+      'Its history and any receipt will be deleted too. This can’t be undone.',
       'Delete',
     );
     if (confirmed) await deleteItem(db, item.id);
@@ -63,7 +68,7 @@ export function ItemRow({
       style={[styles.row, { backgroundColor: theme.backgroundElement, borderColor: categoryColor }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={[item.name, subtitle, price].filter(Boolean).join(', ')}
+        accessibilityLabel={[item.name, subtitle, assetName, price].filter(Boolean).join(', ')}
         onPress={open}
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
         <View style={[styles.dot, { backgroundColor: categoryColor }]} />
@@ -93,9 +98,14 @@ export function ItemRow({
           <ThemedText
             type="small"
             numberOfLines={1}
-            themeColor={!statusLabel && due && due.daysUntil < 0 ? 'danger' : 'textSecondary'}>
+            themeColor={!statusLabel && due?.overdue ? 'danger' : 'textSecondary'}>
             {subtitle}
           </ThemedText>
+          {assetName ? (
+            <ThemedText type="small" numberOfLines={1} themeColor="textSecondary">
+              {assetName}
+            </ThemedText>
+          ) : null}
         </View>
         {showActions ? null : <Icon name="chevron" color={theme.textSecondary} size={16} />}
       </Pressable>

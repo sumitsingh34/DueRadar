@@ -9,7 +9,7 @@ const NOW = `(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
  * N + 1. Never edit a migration that has shipped; append a new one instead.
  */
 const MIGRATIONS: readonly ((db: SQLiteDatabase) => Promise<void>)[] = [
-  // v1: core tables for the whole roadmap (V1 subscriptions through V5 documents).
+  // v1: core tables (V1 subscriptions and V2 warranties).
   async (db) => {
     await db.execAsync(`
       CREATE TABLE items (
@@ -73,6 +73,49 @@ const MIGRATIONS: readonly ((db: SQLiteDatabase) => Promise<void>)[] = [
         key TEXT PRIMARY KEY NOT NULL,
         value TEXT NOT NULL
       );
+    `);
+  },
+
+  // v2 (V3 maintenance): vehicles and homes, odometer readings, and a log of
+  // each time a task was done or a renewal confirmed. Items can belong to a
+  // vehicle or home. Tasks were planned as schedule type "usage".
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE assets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        usage_unit TEXT,
+        details TEXT NOT NULL DEFAULT '{}',
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT ${NOW},
+        updated_at TEXT NOT NULL DEFAULT ${NOW}
+      );
+
+      CREATE TABLE usage_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        asset_id INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+        reading INTEGER NOT NULL,
+        reading_date TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT ${NOW}
+      );
+      CREATE INDEX idx_usage_readings_asset ON usage_readings(asset_id, reading_date);
+
+      CREATE TABLE completions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        done_date TEXT NOT NULL,
+        amount_cents INTEGER,
+        currency TEXT,
+        usage_reading INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL DEFAULT ${NOW}
+      );
+      CREATE INDEX idx_completions_item ON completions(item_id, done_date);
+
+      ALTER TABLE items ADD COLUMN asset_id INTEGER REFERENCES assets(id) ON DELETE SET NULL;
+      CREATE INDEX idx_items_asset ON items(asset_id);
+      UPDATE items SET schedule_type = 'task' WHERE schedule_type = 'usage';
     `);
   },
 ];

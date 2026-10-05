@@ -1,4 +1,4 @@
-import { makeItem } from '@/domain/__fixtures__/items';
+import { makeItem, makeTask } from '@/domain/__fixtures__/items';
 import { MAX_SCHEDULED, planReminders } from '@/domain/reminders';
 
 // Oct 3, 2026, 10:00 local time.
@@ -87,5 +87,38 @@ describe('planReminders', () => {
     expect(plan).toHaveLength(MAX_SCHEDULED);
     const times = plan.map((r) => r.fireAt.getTime());
     expect(times).toEqual([...times].sort((a, b) => a - b));
+  });
+});
+
+describe('planReminders for tasks', () => {
+  const usage = (perDay: number | null, readingDate = '2026-10-03') =>
+    new Map([[1, { unit: 'km' as const, reading: 45000, readingDate, perDay }]]);
+
+  it('reminds before the date, once, with the distance', () => {
+    const task = makeTask({ dueDate: '2026-11-15', usageInterval: 10000, nextUsage: 50000 });
+    const plan = planReminders([task], SETTINGS, NOW, usage(null));
+    expect(plan.map((r) => r.title)).toEqual([
+      'Oil change is due in 30 days',
+      'Oil change is due in 7 days',
+      'Oil change is due tomorrow',
+    ]);
+    expect(plan[0].body).toContain('at 50,000 km');
+  });
+
+  it('reminds before the date the distance is expected to be reached, when sooner', () => {
+    // 5,000 km left at 250 km a day: Oct 23.
+    const plan = planReminders([makeTask()], SETTINGS, NOW, usage(250));
+    expect(plan.map((r) => [r.title, r.dueDate])).toEqual([
+      ['Oil change is due in about 7 days', '2026-10-23'],
+      ['Oil change is due in about a day', '2026-10-23'],
+    ]);
+    expect(plan[0].body).toContain('around');
+  });
+
+  it('falls back to the date once an estimate has passed, and skips overdue tasks', () => {
+    const stale = planReminders([makeTask({ dueDate: '2026-11-15' })], SETTINGS, NOW, usage(250, '2026-06-01'));
+    expect(stale.map((r) => r.dueDate)).toEqual(['2026-11-15', '2026-11-15', '2026-11-15']);
+    expect(planReminders([makeTask({ nextUsage: 44000 })], SETTINGS, NOW, usage(null))).toEqual([]);
+    expect(planReminders([makeTask({ dueDate: '2026-10-01' })], SETTINGS, NOW, usage(null))).toEqual([]);
   });
 });

@@ -8,7 +8,9 @@ const ICONS = {
   clear: { ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel', fallback: '✕' },
   delete: { ios: 'trash', android: 'delete', web: 'delete', fallback: '✕' },
   edit: { ios: 'pencil', android: 'edit', web: 'edit', fallback: '✎' },
+  home: { ios: 'house.fill', android: 'home', web: 'home', fallback: '⌂' },
   search: { ios: 'magnifyingglass', android: 'search', web: 'search', fallback: '⌕' },
+  vehicle: { ios: 'car.fill', android: 'directions_car', web: 'directions_car', fallback: '◆' },
 } as const;
 
 export type IconName = keyof typeof ICONS;
