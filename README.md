@@ -13,10 +13,14 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 ## Screenshots
 
 <p>
-  <img src="docs/assets/screenshots/1-new-item.jpg" width="200" alt="Adding an item, with quick-add suggestions">
-  <img src="docs/assets/screenshots/2-overview.jpg" width="200" alt="Overview: monthly cost and what's due next">
-  <img src="docs/assets/screenshots/3-all-items.jpg" width="200" alt="All items, with search, edit and delete">
-  <img src="docs/assets/screenshots/4-settings.jpg" width="200" alt="Settings: when and how early to be reminded">
+  <img src="docs/assets/screenshots/1-overview.jpg" width="200" alt="Overview: monthly cost, what needs attention and what's due next">
+  <img src="docs/assets/screenshots/2-recurring-costs.jpg" width="200" alt="Recurring costs by category, with each one's share">
+  <img src="docs/assets/screenshots/3-category.jpg" width="200" alt="A category's items, with edit and delete">
+  <img src="docs/assets/screenshots/4-all-items.jpg" width="200" alt="All items, numbered, with search, edit and delete">
+  <img src="docs/assets/screenshots/5-vehicle.jpg" width="200" alt="A car's odometer, and services due by date or distance">
+  <img src="docs/assets/screenshots/6-document.jpg" width="200" alt="A passport and when it expires">
+  <img src="docs/assets/screenshots/7-quick-add.jpg" width="200" alt="Quick-add: type a few letters and pick a suggestion">
+  <img src="docs/assets/screenshots/8-settings.jpg" width="200" alt="Settings: when and how early to be reminded">
 </p>
 
 ## Features
