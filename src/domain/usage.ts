@@ -26,9 +26,10 @@ const MAX_ESTIMATE_DAYS = 3650;
 /** The latest reading and the average daily distance of a vehicle, or null without readings. */
 export function summarizeUsage(asset: Asset, readings: readonly UsageReading[]): VehicleUsage | null {
   if (asset.kind !== 'vehicle' || !asset.usageUnit) return null;
+  // On the same day, the last one entered counts, so a typo can be corrected.
   const own = readings
     .filter((r) => r.assetId === asset.id)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.reading - b.reading || a.id - b.id);
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
   if (own.length === 0) return null;
 
   const latest = own[own.length - 1];

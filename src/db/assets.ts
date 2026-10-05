@@ -79,6 +79,12 @@ export async function addReading(db: SQLiteDatabase, assetId: number, reading: n
   emitDataChanged();
 }
 
+/** Deletes an odometer reading, e.g. one entered by mistake. */
+export async function deleteReading(db: SQLiteDatabase, id: number): Promise<void> {
+  await db.runAsync('DELETE FROM usage_readings WHERE id = ?', id);
+  emitDataChanged();
+}
+
 /** Every vehicle's odometer readings, oldest first. */
 export async function listReadings(db: SQLiteDatabase): Promise<UsageReading[]> {
   const rows = await db.getAllAsync<ReadingRow>('SELECT * FROM usage_readings ORDER BY reading_date, id');

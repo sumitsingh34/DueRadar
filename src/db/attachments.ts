@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import {
   deleteAttachmentFile,
+  deleteCachedFile,
   readAttachmentBase64,
   readFileBase64,
   storeAttachmentFile,
@@ -86,6 +87,7 @@ export async function setReceipt(
     }
   });
   for (const path of oldPaths) deleteAttachmentFile(path);
+  if (photo) deleteCachedFile(photo.uri);
   emitDataChanged();
 }
 
@@ -145,12 +147,16 @@ export async function saveDocumentPhotos(
   const removed = rows.filter((row) => !kept.has(row.id));
 
   // Encrypt and write new photos first, so a failure leaves the saved ones as they were.
-  const added: { path: string; mimeType: string }[] = [];
+  const added: { path: string; mimeType: string; source: string }[] = [];
   for (const [index, photo] of photos.entries()) {
     if (photo.attachmentId != null || !photo.uri) continue;
     const encrypted = await encryptBase64(await readFileBase64(photo.uri));
     const fileName = `${itemId}-${Date.now()}-${index}.enc`;
-    added.push({ path: writeAttachmentBase64(fileName, encrypted, 'vault'), mimeType: photo.mimeType ?? 'image/jpeg' });
+    added.push({
+      path: writeAttachmentBase64(fileName, encrypted, 'vault'),
+      mimeType: photo.mimeType ?? 'image/jpeg',
+      source: photo.uri,
+    });
   }
 
   await db.withTransactionAsync(async () => {
@@ -166,6 +172,8 @@ export async function saveDocumentPhotos(
     }
   });
   for (const row of removed) deleteAttachmentFile(row.file_uri);
+  // The picker's unencrypted copies aren't needed any more.
+  for (const file of added) deleteCachedFile(file.source);
   emitDataChanged();
 }
 

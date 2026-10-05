@@ -22,6 +22,8 @@ export async function readFileBase64(_uri: string): Promise<string> {
   throw new Error('Photos are only available in the phone app.');
 }
 
+export function deleteCachedFile(_uri: string): void {}
+
 export function writeAttachmentBase64(_fileName: string, _data: string, _folder?: PhotoFolder): string {
   throw new Error('Photos are only available in the phone app.');
 }

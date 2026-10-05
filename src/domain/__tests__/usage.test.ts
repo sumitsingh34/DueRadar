@@ -31,6 +31,11 @@ describe('summarizeUsage', () => {
     ).toBeCloseTo(1000 / 30);
   });
 
+  it('lets a later reading on the same day correct an earlier one', () => {
+    const usage = summarizeUsage(car, [reading(1, 145000, '2026-10-01'), reading(2, 45000, '2026-10-01')]);
+    expect(usage?.reading).toBe(45000);
+  });
+
   it('gives no estimate when the odometer went down, and nothing without readings', () => {
     expect(summarizeUsage(car, [reading(1, 40000, '2026-08-01'), reading(2, 100, '2026-10-01')])).toMatchObject({
       reading: 100,

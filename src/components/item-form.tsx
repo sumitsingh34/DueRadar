@@ -130,8 +130,8 @@ export function ItemForm({
   const [startDate, setStartDate] = useState<string | null>(initial?.startDate ?? null);
   const [dueDate, setDueDate] = useState<string | null>(initial?.dueDate ?? null);
   const [dueTime, setDueTime] = useState<string | null>(initial?.dueTime ?? null);
-  // Whether a quick-add template filled in the due date, so another template may replace it.
-  const [dueDateFromTemplate, setDueDateFromTemplate] = useState(false);
+  // Whether a quick-add template filled in the dates, so another template may replace them.
+  const [datesFromTemplate, setDatesFromTemplate] = useState(false);
   // The length shortcut (e.g. a 2-year warranty) that matches the dates, if any.
   const [lengthYears, setLengthYears] = useState<number | null>(() =>
     initial?.startDate && initial.dueDate
@@ -164,6 +164,8 @@ export function ItemForm({
   const [nextUsageEdited, setNextUsageEdited] = useState(initial?.nextUsage != null);
   // A template's distance, applied once a vehicle is chosen and its unit is known.
   const [pendingDistance, setPendingDistance] = useState<ItemTemplate['distance'] | null>(null);
+  // Whether that distance filled in the interval, so a vehicle with another unit can replace it.
+  const [intervalFromTemplate, setIntervalFromTemplate] = useState(false);
   // IDs of the vehicles and homes there were when the user went to add a new one.
   const [assetsBeforeNew, setAssetsBeforeNew] = useState<number[] | null>(null);
   const [errors, setErrors] = useState<Errors>({});
@@ -182,6 +184,8 @@ export function ItemForm({
   const dated = !canSkipDate || hasDate;
   const lengthOptions = schedule === 'expiry' && dated ? (categoryInfo.lengthYears ?? []) : [];
   const showTime = schedule === 'expiry' && dated && categoryInfo.time === true;
+  const keepsReceipt = categoryInfo.receipts === true && attachmentsSupported;
+  const keepsPhotos = categoryInfo.documentPhotos === true && attachmentsSupported;
   const dueDateLabel =
     schedule === 'recurring'
       ? renewal.dateLabel
@@ -201,19 +205,24 @@ export function ItemForm({
   const unit = vehicle?.usageUnit ?? 'km';
   const vehicleUsage = vehicle ? assetData?.usage.get(vehicle.id) : undefined;
 
-  /** Fills in the due reading from the latest one, until the user types their own. */
+  /**
+   * Fills in the due reading from the vehicle's latest one, until the user
+   * types their own. Without a reading to go on, it's left empty.
+   */
   const suggestNextUsage = (interval: number | null, asset: Asset | null) => {
+    if (nextUsageEdited) return;
     const usage = asset ? assetData?.usage.get(asset.id) : undefined;
-    if (!nextUsageEdited && interval != null && usage) setNextUsage(String(usage.reading + interval));
+    setNextUsage(interval != null && usage ? String(usage.reading + interval) : '');
   };
 
-  /** For a vehicle's task: the distance a template suggested, and the reading it's due at. */
+  /** For a vehicle's task: the distance a template suggested, in its unit, and the reading it's due at. */
   const fillDistance = (asset: Asset | null, forSchedule: ScheduleType) => {
     if (asset?.kind !== 'vehicle' || forSchedule !== 'task') return;
     let interval = parseDistanceInput(usageInterval);
-    if (interval == null && pendingDistance) {
+    if ((interval == null || intervalFromTemplate) && pendingDistance) {
       interval = pendingDistance[asset.usageUnit ?? 'km'];
       setUsageInterval(String(interval));
+      setIntervalFromTemplate(true);
     }
     suggestNextUsage(interval, asset);
   };
@@ -240,11 +249,12 @@ export function ItemForm({
 
   const changeStartDate = (date: string) => {
     setStartDate(date);
+    setDatesFromTemplate(false);
     if (lengthYears) setDueDate(addInterval(date, 'year', lengthYears));
   };
   const changeDueDate = (date: string) => {
     setDueDate(date);
-    setDueDateFromTemplate(false);
+    setDatesFromTemplate(false);
     setLengthYears(null);
   };
   const chooseLength = (years: number) => {
@@ -252,6 +262,7 @@ export function ItemForm({
     setStartDate(start);
     setLengthYears(years);
     setDueDate(addInterval(start, 'year', years));
+    setDatesFromTemplate(false);
   };
   const changeReminders = (days: number[] | null) => {
     setReminderDays(days);
@@ -271,6 +282,7 @@ export function ItemForm({
   };
   const changeUsageInterval = (text: string) => {
     setUsageInterval(text);
+    setIntervalFromTemplate(false);
     suggestNextUsage(parseDistanceInput(text), vehicle);
   };
   const changeNextUsage = (text: string) => {
@@ -338,22 +350,42 @@ export function ItemForm({
     const nextSchedule = templateSchedule(template);
     if (template.frequency) setFrequency(template.frequency);
     if (nextSchedule === 'recurring') setAutoRenew(template.autoRenew ?? true);
-    if (nextSchedule === 'task' && template.frequency && (!dueDate || dueDateFromTemplate)) {
+
+    // Dates an earlier suggestion filled in give way to this one's; dates the user chose stay.
+    const today = todayISO();
+    const ownStart = datesFromTemplate ? null : startDate;
+    const ownDue = datesFromTemplate ? null : dueDate;
+    let nextStart = ownStart;
+    let nextDue = ownDue;
+    let filled = false;
+    if (nextSchedule === 'task' && template.frequency && !ownDue) {
       // As if it was just done; the user can change the date.
-      setDueDate(addInterval(todayISO(), template.frequency.unit, template.frequency.count));
-      setDueDateFromTemplate(true);
+      nextDue = addInterval(today, template.frequency.unit, template.frequency.count);
+      filled = true;
+    } else if (nextSchedule === 'expiry' && template.warrantyYears) {
+      // Bought today, unless the user already picked the purchase date.
+      nextStart = ownStart ?? today;
+      nextDue = addInterval(nextStart, 'year', template.warrantyYears);
+      filled = true;
     }
-    const asset = applyCategory(template.category, nextSchedule);
-    if (nextSchedule === 'expiry' && template.warrantyYears) chooseLength(template.warrantyYears);
+    setStartDate(nextStart);
+    setDueDate(nextDue);
+    setDatesFromTemplate(filled);
     setHasDate(!template.noDate);
+
+    const asset = applyCategory(template.category, nextSchedule);
+    if (nextSchedule === 'expiry' && template.warrantyYears) setLengthYears(template.warrantyYears);
+
     // Kept for when a vehicle is chosen later, since the distance depends on its unit.
     setPendingDistance(template.distance ?? null);
     if (template.distance && asset?.kind === 'vehicle') {
       const interval = template.distance[asset.usageUnit ?? 'km'];
       setUsageInterval(String(interval));
+      setIntervalFromTemplate(true);
       suggestNextUsage(interval, asset);
     } else {
       setUsageInterval('');
+      setIntervalFromTemplate(false);
       if (!nextUsageEdited) setNextUsage('');
     }
   };
@@ -414,7 +446,14 @@ export function ItemForm({
           notes,
           assetId: showAssets ? (selectedAsset?.id ?? null) : null,
         },
-        { receipt, receiptChanged, photos, photosChanged },
+        // Photos only go with categories that show them. A saved one stays with the
+        // item if its category changes, and shows again if it changes back.
+        {
+          receipt: keepsReceipt ? receipt : null,
+          receiptChanged: keepsReceipt && receiptChanged,
+          photos: keepsPhotos ? photos : [],
+          photosChanged: keepsPhotos && photosChanged,
+        },
       );
     } finally {
       setSaving(false);
@@ -654,13 +693,13 @@ export function ItemForm({
           />
         </FormField>
 
-        {categoryInfo.receipts && attachmentsSupported ? (
+        {keepsReceipt ? (
           <FormField label="Receipt (optional)">
             <ReceiptField value={receipt} onChange={changeReceipt} />
           </FormField>
         ) : null}
 
-        {categoryInfo.documentPhotos && attachmentsSupported ? (
+        {keepsPhotos ? (
           <FormField label="Photos of the document (optional)">
             <DocumentPhotosField
               value={photos}

@@ -156,10 +156,17 @@ export default function SettingsScreen() {
   // screen lock on the phone, the lock does nothing, so turning it off doesn't ask.
   const toggleAppLock = (appLock: boolean) =>
     run(async () => {
-      const confirmed =
-        (!appLock && lockAvailable === false) ||
-        (await authenticate(appLock ? 'Turn on the app lock' : 'Turn off the app lock'));
-      if (confirmed) await updateSettings(db, { appLock });
+      if (!appLock && lockAvailable === false) {
+        await updateSettings(db, { appLock });
+        return;
+      }
+      const result = await authenticate(appLock ? 'Turn on the app lock' : 'Turn off the app lock');
+      if (result === 'success') {
+        await updateSettings(db, { appLock });
+      } else if (result === 'unavailable') {
+        setLockAvailable(false);
+        if (!appLock) await updateSettings(db, { appLock });
+      }
     });
 
   const otherCurrencyCount = items.filter((item) => item.currency !== settings.currency).length;

@@ -7,9 +7,11 @@ import { AppLock } from '@/components/app-lock';
 import { ReminderSync } from '@/components/reminder-sync';
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db/migrations';
 import { configureNotifications } from '@/notifications/reminders';
+import { clearTemporaryFiles } from '@/utils/files';
 
 SplashScreen.preventAutoHideAsync();
 configureNotifications();
+clearTemporaryFiles();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

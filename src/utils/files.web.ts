@@ -1,5 +1,8 @@
 import * as DocumentPicker from 'expo-document-picker';
 
+/** The browser keeps no temporary files for the app. */
+export function clearTemporaryFiles(): void {}
+
 /** Downloads the file in the browser. */
 export async function shareTextFile(fileName: string, content: string, mimeType: string): Promise<void> {
   const url = URL.createObjectURL(new Blob([content], { type: mimeType }));

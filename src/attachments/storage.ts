@@ -44,6 +44,21 @@ export function readFileBase64(uri: string): Promise<string> {
   return new File(uri).base64();
 }
 
+/**
+ * Deletes a temporary copy, such as the picker's copy of a photo once it's
+ * saved, so no unencrypted copy of a document stays behind. Files outside the
+ * app's cache are never touched.
+ */
+export function deleteCachedFile(uri: string): void {
+  try {
+    if (!uri.startsWith(Paths.cache.uri.replace(/\/?$/, '/'))) return;
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch (error) {
+    console.warn('Could not delete a temporary file', error);
+  }
+}
+
 /** Writes a file from base64 data, e.g. from a backup, and returns its stored path. */
 export function writeAttachmentBase64(fileName: string, data: string, folder: PhotoFolder = 'receipts'): string {
   const file = new File(photoFolder(folder), fileName);

@@ -20,13 +20,17 @@ export async function canUseAppLock(): Promise<boolean> {
   }
 }
 
-/** Asks for the fingerprint, face or phone PIN. Resolves true once the user is confirmed. */
-export async function authenticate(promptMessage: string): Promise<boolean> {
+/**
+ * Asks for the fingerprint, face or phone PIN. "unavailable" means the phone
+ * no longer has a screen lock, so there's nothing to confirm with.
+ */
+export async function authenticate(promptMessage: string): Promise<'success' | 'failed' | 'unavailable'> {
   const result = await LocalAuthentication.authenticateAsync({
     promptMessage,
     cancelLabel: 'Cancel',
     // Let the phone's PIN, pattern or password work as well as biometrics.
     disableDeviceFallback: false,
   });
-  return result.success;
+  if (result.success) return 'success';
+  return result.error === 'not_enrolled' || result.error === 'passcode_not_set' ? 'unavailable' : 'failed';
 }
