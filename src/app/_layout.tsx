@@ -29,6 +29,8 @@ export default function RootLayout() {
           <Stack.Screen name="item/done/[id]" options={{ presentation: 'modal', title: 'Mark as done' }} />
           <Stack.Screen name="asset/new" options={{ presentation: 'modal', title: 'New vehicle or home' }} />
           <Stack.Screen name="asset/[id]" options={{ title: 'Vehicle or home' }} />
+          <Stack.Screen name="costs" options={{ title: 'Recurring costs' }} />
+          <Stack.Screen name="category/[id]" options={{ title: 'Category' }} />
         </Stack>
       </SQLiteProvider>
     </ThemeProvider>

@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -12,10 +13,16 @@ import { useTheme } from '@/hooks/use-theme';
 /** Scrollable tab page with a large title and, optionally, an "Add" button. */
 export function TabScreen({
   title,
+  brand = false,
   showAdd = true,
   children,
 }: {
   title: string;
+  /**
+   * Shows the app's icon and name in place of the title, on phones. The web
+   * keeps the title, since its top bar already shows the name.
+   */
+  brand?: boolean;
   showAdd?: boolean;
   children: ReactNode;
 }) {
@@ -33,9 +40,18 @@ export function TabScreen({
         keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <View style={styles.header}>
-            <ThemedText type="subtitle" accessibilityRole="header">
-              {title}
-            </ThemedText>
+            {brand && Platform.OS !== 'web' ? (
+              <View style={styles.brand}>
+                <Image source={require('../../assets/images/icon.png')} style={styles.logo} />
+                <ThemedText type="subtitle" accessibilityRole="header">
+                  DueRadar
+                </ThemedText>
+              </View>
+            ) : (
+              <ThemedText type="subtitle" accessibilityRole="header">
+                {title}
+              </ThemedText>
+            )}
             {showAdd ? <AddButton /> : null}
           </View>
           {children}
@@ -96,6 +112,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Spacing.three,
+  },
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  // Rounded like the icon on the home screen.
+  logo: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
   },
   addButton: {
     flexDirection: 'row',

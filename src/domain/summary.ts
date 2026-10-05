@@ -1,4 +1,4 @@
-import { getCategory, recurringWording } from './categories';
+import { CATEGORIES, getCategory, recurringWording, type Category, type CategoryId } from './categories';
 import { daysBetween, formatDate, formatShortDate, formatTime, nextOccurrenceOnOrAfter } from './dates';
 import { monthlyEquivalentCents } from './money';
 import type { Item } from './types';
@@ -161,26 +161,107 @@ export function buildDashboard(
 ): DashboardSummary {
   const active = items.filter((item) => item.status === 'active');
 
-  const totals = new Map<string, number>();
-  for (const item of active) {
-    if (item.scheduleType === 'expiry' || !hasInterval(item) || item.amountCents == null) continue;
-    const monthly = monthlyEquivalentCents(item.amountCents, item.intervalUnit, item.intervalCount);
-    totals.set(item.currency, (totals.get(item.currency) ?? 0) + monthly);
-  }
-
   const due = active
     .map((item) => toDueItem(item, today, usage))
     .filter((d): d is DueItem => d !== null)
     .sort((a, b) => a.daysUntil - b.daysUntil);
 
   return {
-    totals: [...totals]
-      .map(([currency, monthlyCents]) => ({ currency, monthlyCents }))
-      .sort((a, b) => b.monthlyCents - a.monthlyCents),
+    totals: monthlyTotals(active),
     activeCount: active.length,
     upcoming: due.filter((d) => !d.overdue && !d.past && d.daysUntil <= windowDays),
     needsAttention: due.filter((d) => d.overdue),
   };
+}
+
+/** What the active items that repeat cost a month, per currency, largest first. */
+export function monthlyTotals(items: readonly Item[]): CurrencyTotal[] {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    if (item.status !== 'active' || !hasInterval(item) || item.amountCents == null) continue;
+    const monthly = monthlyEquivalentCents(item.amountCents, item.intervalUnit, item.intervalCount);
+    totals.set(item.currency, (totals.get(item.currency) ?? 0) + monthly);
+  }
+  return [...totals]
+    .map(([currency, monthlyCents]) => ({ currency, monthlyCents }))
+    .sort((a, b) => b.monthlyCents - a.monthlyCents);
+}
+
+/** The monthly total in one currency, or 0 when there is none. */
+export function totalIn(totals: readonly CurrencyTotal[], currency: string): number {
+  return totals.find((total) => total.currency === currency)?.monthlyCents ?? 0;
+}
+
+export interface CategoryCosts {
+  category: Category;
+  /** How many items it has, whatever their status. */
+  itemCount: number;
+  /** What its active items that repeat cost a month, per currency, largest first. */
+  totals: CurrencyTotal[];
+}
+
+/**
+ * Every category that has items, with what it costs a month: the largest
+ * cost in `currency` (the main one) first, then costs only in other
+ * currencies, then the categories with no recurring cost, each in the usual
+ * category order.
+ */
+export function costsByCategory(items: readonly Item[], currency: string): CategoryCosts[] {
+  const byCategory = new Map<CategoryId, Item[]>();
+  for (const item of items) {
+    // Unknown categories count as Other, as everywhere else.
+    const id = getCategory(item.category).id;
+    byCategory.set(id, [...(byCategory.get(id) ?? []), item]);
+  }
+  return CATEGORIES.filter((category) => byCategory.has(category.id))
+    .map((category) => {
+      const list = byCategory.get(category.id)!;
+      return { category, itemCount: list.length, totals: monthlyTotals(list) };
+    })
+    .sort(
+      (a, b) =>
+        totalIn(b.totals, currency) - totalIn(a.totals, currency) ||
+        Number(b.totals.length > 0) - Number(a.totals.length > 0),
+    );
+}
+
+/** An item in a list, with when it's next due. */
+export interface ListedItem {
+  item: Item;
+  due: DueItem | null;
+}
+
+export interface ItemSection {
+  key: 'active' | 'past' | 'inactive';
+  label: string;
+  rows: ListedItem[];
+}
+
+/**
+ * Items the way lists show them: active ones soonest first, then
+ * appointments that are over, most recent first, then paused or cancelled
+ * ones. Empty sections are left out.
+ */
+export function itemSections(items: readonly Item[], today: string, usage?: UsageMap): ItemSection[] {
+  const rows = items.map((item) => ({ item, due: toDueItem(item, today, usage) }));
+  const active = rows.filter((r) => r.item.status === 'active');
+  const sections: ItemSection[] = [
+    {
+      key: 'active',
+      label: 'Active',
+      rows: active
+        .filter((r) => !r.due?.past)
+        .sort((a, b) => (a.due?.daysUntil ?? Infinity) - (b.due?.daysUntil ?? Infinity)),
+    },
+    // Appointments that are over, most recent first.
+    {
+      key: 'past',
+      label: 'Past',
+      rows: active.filter((r) => r.due?.past).sort((a, b) => b.due!.daysUntil - a.due!.daysUntil),
+    },
+    { key: 'inactive', label: 'Paused or cancelled', rows: rows.filter((r) => r.item.status !== 'active') },
+  ];
+  return sections.filter((section) => section.rows.length > 0);
 }
 
 /** Whether the item repeats every interval (a renewal or a task). */

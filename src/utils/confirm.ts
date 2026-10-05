@@ -32,6 +32,23 @@ export function chooseAsync<T>(
   });
 }
 
+/** Asks what to do with a form's unsaved changes when leaving it. */
+export function askAboutUnsavedChanges(): Promise<'save' | 'discard' | 'keep'> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Save your changes?',
+      'If you leave without saving, they’ll be lost.',
+      [
+        // On Android the first button sits on its own on the left.
+        { text: 'Keep editing', style: 'cancel', onPress: () => resolve('keep') },
+        { text: 'Discard', style: 'destructive', onPress: () => resolve('discard') },
+        { text: 'Save', onPress: () => resolve('save') },
+      ],
+      { cancelable: true, onDismiss: () => resolve('keep') },
+    );
+  });
+}
+
 /** Shows a short message with an OK button. */
 export function showMessage(title: string, message: string): void {
   Alert.alert(title, message);

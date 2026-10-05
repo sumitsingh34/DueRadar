@@ -16,6 +16,7 @@ import type { Asset, Item } from '@/domain/types';
 import { formatDistance, parseDistanceInput, type VehicleUsage } from '@/domain/usage';
 import { useAssets } from '@/hooks/use-assets';
 import { useTheme } from '@/hooks/use-theme';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { showMessage } from '@/utils/confirm';
 import { goBack } from '@/utils/navigation';
 
@@ -80,6 +81,12 @@ function DoneForm({
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
 
+  const leave = useUnsavedChanges({
+    values: { date, reading, amount, note },
+    saving,
+    save: () => submit(),
+  });
+
   const vehicle = asset?.kind === 'vehicle' ? asset : null;
   const unit = vehicle?.usageUnit ?? 'km';
   // A reading is needed to work out the next distance; otherwise it's optional.
@@ -117,12 +124,13 @@ function DoneForm({
     setSaving(true);
     try {
       await completeTask(db, item, { date, usage: usageValue, amountCents, note });
-      goBack();
     } catch (error) {
       showMessage('Couldn’t save', error instanceof Error ? error.message : String(error));
+      return;
     } finally {
       setSaving(false);
     }
+    leave();
   };
 
   return (

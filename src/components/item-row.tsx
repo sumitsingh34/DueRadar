@@ -13,22 +13,27 @@ import { formatMoney } from '@/domain/money';
 import { dueLabel, shortDueDate, type DueItem } from '@/domain/summary';
 import type { Item } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
+import { textColorOn } from '@/utils/color';
 import { confirmAsync } from '@/utils/confirm';
 
 const STATUS_LABELS = { active: null, paused: 'Paused', cancelled: 'Cancelled' } as const;
 
 /**
- * One item in a list. Tapping it opens the item. With `showActions`, it also
- * has edit and delete buttons; otherwise an arrow hints that it opens.
+ * One item in a list, numbered in its category's color. Tapping it opens the
+ * item. With `showActions`, it also has edit and delete buttons; otherwise an
+ * arrow hints that it opens.
  */
 export function ItemRow({
   item,
   due,
+  number,
   showActions = false,
   assetName,
 }: {
   item: Item;
   due: DueItem | null;
+  /** Its place in the list, from 1. */
+  number: number;
   showActions?: boolean;
   /** The vehicle or home it belongs to, shown under the date. */
   assetName?: string | null;
@@ -73,7 +78,14 @@ export function ItemRow({
         accessibilityLabel={[item.name, subtitle, assetName, price].filter(Boolean).join(', ')}
         onPress={open}
         style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
-        <View style={[styles.dot, { backgroundColor: categoryColor }]} />
+        <View style={[styles.badge, { backgroundColor: categoryColor }]}>
+          <ThemedText
+            type="smallBold"
+            maxFontSizeMultiplier={1.5}
+            style={[styles.badgeText, { color: textColorOn(categoryColor) }]}>
+            {number}
+          </ThemedText>
+        </View>
         <View style={styles.text}>
           {showActions ? (
             // The edit and delete buttons take width, so the price gets its own line.
@@ -156,22 +168,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 14,
-    // Outlined in the category's color, matching the dot.
+    // Outlined in the category's color, matching the number.
     borderWidth: 1.5,
   },
   main: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: 12,
     paddingLeft: Spacing.three,
     paddingRight: Spacing.two,
     paddingVertical: 12,
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  // A pill rather than a circle once the number has more digits.
+  badge: {
+    minWidth: 24,
+    minHeight: 24,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontVariant: ['tabular-nums'],
+    includeFontPadding: false,
   },
   text: {
     flex: 1,

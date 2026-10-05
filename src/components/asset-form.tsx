@@ -8,6 +8,8 @@ import { ASSET_KINDS } from '@/domain/assets';
 import type { AssetInput, AssetKind, DistanceUnit } from '@/domain/types';
 import { DISTANCE_UNITS, parseDistanceInput } from '@/domain/usage';
 import { useTheme } from '@/hooks/use-theme';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import { showMessage } from '@/utils/confirm';
 
 const KIND_OPTIONS = (Object.keys(ASSET_KINDS) as AssetKind[]).map((kind) => ({
   value: kind,
@@ -27,12 +29,18 @@ interface AssetFormProps {
   /** Odometer unit for a new vehicle. */
   defaultUnit: DistanceUnit;
   submitLabel: string;
-  /** `reading` is the current odometer reading of a new vehicle, if given. */
+  /**
+   * Saves it. `reading` is the current odometer reading of a new vehicle, if
+   * given. The screen closes once it's done.
+   */
   onSubmit: (input: AssetInput, reading: number | null) => Promise<void>;
+  /**
+   * Shows a delete button. Deletes it after asking, and resolves to whether
+   * it did; the screen then closes.
+   */
+  onDelete?: () => Promise<boolean>;
   /** Extra content above the fields, e.g. the odometer and items. */
   header?: ReactNode;
-  /** Extra content below the save button, e.g. a delete button. */
-  footer?: ReactNode;
 }
 
 type Errors = Partial<Record<'name' | 'reading', string>>;
@@ -44,8 +52,8 @@ export function AssetForm({
   defaultUnit,
   submitLabel,
   onSubmit,
+  onDelete,
   header,
-  footer,
 }: AssetFormProps) {
   const theme = useTheme();
   const [kind, setKind] = useState<AssetKind>(initial?.kind ?? presetKind ?? 'vehicle');
@@ -56,6 +64,12 @@ export function AssetForm({
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+
+  const leave = useUnsavedChanges({
+    values: { kind, name, plate, unit, reading, notes },
+    saving,
+    save: () => submit(),
+  });
 
   const isVehicle = kind === 'vehicle';
   const kindInfo = ASSET_KINDS[kind];
@@ -81,8 +95,20 @@ export function AssetForm({
         { name, kind, usageUnit: isVehicle ? unit : null, details, notes },
         odometer,
       );
+    } catch (error) {
+      showMessage('Couldn’t save', error instanceof Error ? error.message : String(error));
+      return;
     } finally {
       setSaving(false);
+    }
+    leave();
+  };
+
+  const remove = async () => {
+    try {
+      if (await onDelete?.()) leave();
+    } catch (error) {
+      showMessage('Couldn’t delete', error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -165,7 +191,14 @@ export function AssetForm({
         </FormField>
 
         <Button title={saving ? 'Saving…' : submitLabel} onPress={submit} disabled={saving} />
-        {footer}
+        {onDelete ? (
+          <Button
+            title={`Delete ${kindInfo.label.toLowerCase()}`}
+            variant="danger"
+            onPress={remove}
+            disabled={saving}
+          />
+        ) : null}
       </View>
     </ScrollView>
   );

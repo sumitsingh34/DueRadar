@@ -49,6 +49,8 @@ import { formatDistance, parseDistanceInput } from '@/domain/usage';
 import { useAssets } from '@/hooks/use-assets';
 import { useSettings } from '@/hooks/use-settings';
 import { useTheme } from '@/hooks/use-theme';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import { showMessage } from '@/utils/confirm';
 
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -87,11 +89,15 @@ interface ItemFormProps {
   defaultCategory?: CategoryId;
   defaultAssetId?: number;
   submitLabel: string;
+  /** Saves the item. The screen closes once it's done. */
   onSubmit: (input: ItemInput, files: FileChanges) => Promise<void>;
+  /**
+   * Shows a delete button. Deletes the item after asking, and resolves to
+   * whether it did; the screen then closes.
+   */
+  onDelete?: () => Promise<boolean>;
   /** Extra content shown above the fields, e.g. renewal status. */
   header?: ReactNode;
-  /** Extra content shown below the save button, e.g. a delete button. */
-  footer?: ReactNode;
 }
 
 type Errors = Partial<Record<'name' | 'amount' | 'dueDate' | 'usageInterval' | 'nextUsage', string>>;
@@ -105,8 +111,8 @@ export function ItemForm({
   defaultAssetId,
   submitLabel,
   onSubmit,
+  onDelete,
   header,
-  footer,
 }: ItemFormProps) {
   const theme = useTheme();
   const assetData = useAssets();
@@ -170,6 +176,32 @@ export function ItemForm({
   const [assetsBeforeNew, setAssetsBeforeNew] = useState<number[] | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+
+  const leave = useUnsavedChanges({
+    values: {
+      name,
+      category,
+      schedule,
+      amount,
+      frequency,
+      startDate,
+      dueDate,
+      dueTime,
+      reminderDays,
+      receipt: receipt?.uri,
+      photos: photos.map((photo) => photo.key),
+      hasDate,
+      autoRenew,
+      status,
+      provider,
+      notes,
+      assetId,
+      usageInterval,
+      nextUsage,
+    },
+    saving,
+    save: () => submit(),
+  });
 
   const recurring = schedule === 'recurring';
   const repeats = schedule !== 'expiry';
@@ -455,8 +487,20 @@ export function ItemForm({
           photosChanged: keepsPhotos && photosChanged,
         },
       );
+    } catch (error) {
+      showMessage('Couldn’t save', error instanceof Error ? error.message : String(error));
+      return;
     } finally {
       setSaving(false);
+    }
+    leave();
+  };
+
+  const remove = async () => {
+    try {
+      if (await onDelete?.()) leave();
+    } catch (error) {
+      showMessage('Couldn’t delete', error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -721,7 +765,7 @@ export function ItemForm({
         </FormField>
 
         <Button title={saving ? 'Saving…' : submitLabel} onPress={submit} disabled={saving} />
-        {footer}
+        {onDelete ? <Button title="Delete item" variant="danger" onPress={remove} disabled={saving} /> : null}
       </View>
     </ScrollView>
   );

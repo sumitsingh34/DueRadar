@@ -130,9 +130,8 @@ export default function EditItemScreen() {
       'Its history and any receipt will be deleted too. This can’t be undone.',
       'Delete',
     );
-    if (!confirmed) return;
-    await deleteItem(db, item.id);
-    goBack();
+    if (confirmed) await deleteItem(db, item.id);
+    return confirmed;
   };
 
   const distanceUnit = item.usageUnit ?? asset?.usageUnit ?? null;
@@ -256,10 +255,9 @@ export default function EditItemScreen() {
               showMessage('Saved, but the photos weren’t', error instanceof Error ? error.message : String(error));
             }
           }
-          goBack();
         }}
+        onDelete={remove}
         header={header}
-        footer={<Button title="Delete item" variant="danger" onPress={remove} />}
       />
     </>
   );

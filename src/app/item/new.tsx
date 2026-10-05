@@ -11,7 +11,6 @@ import { CATEGORIES, type CategoryId } from '@/domain/categories';
 import { useSettings } from '@/hooks/use-settings';
 import { getReminderPermission, requestReminderPermission } from '@/notifications/reminders';
 import { showMessage } from '@/utils/confirm';
-import { goBack } from '@/utils/navigation';
 
 export default function NewItemScreen() {
   // Set when adding from a vehicle's or home's page.
@@ -52,7 +51,6 @@ export default function NewItemScreen() {
         if (settings.remindersEnabled && (await getReminderPermission()) === 'undetermined') {
           if ((await requestReminderPermission()) === 'granted') emitDataChanged();
         }
-        goBack();
       }}
     />
   );

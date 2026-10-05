@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { AssetRow } from '@/components/asset-row';
+import { CostCard } from '@/components/cost-card';
 import { Button } from '@/components/form-controls';
 import { ItemRow } from '@/components/item-row';
 import { PriceIncreaseRow } from '@/components/price-increase-row';
@@ -12,7 +13,7 @@ import { Spacing } from '@/constants/theme';
 import { vehiclesNeedingReading } from '@/domain/assets';
 import { daysBetween, todayISO } from '@/domain/dates';
 import { findPriceIncreases } from '@/domain/insights';
-import { DEFAULT_CURRENCY, formatMoney } from '@/domain/money';
+import { DEFAULT_CURRENCY } from '@/domain/money';
 import { buildDashboard, describeDays } from '@/domain/summary';
 import { useAssets } from '@/hooks/use-assets';
 import { useItems, usePriceHistory } from '@/hooks/use-items';
@@ -31,7 +32,7 @@ export default function OverviewScreen() {
 
   if (items.length === 0) {
     return (
-      <TabScreen title="Overview">
+      <TabScreen title="Overview" brand>
         <ThemedView type="backgroundElement" style={styles.card}>
           <ThemedText type="smallBold">Never miss a renewal</ThemedText>
           <ThemedText themeColor="textSecondary">
@@ -47,39 +48,31 @@ export default function OverviewScreen() {
 
   const today = todayISO();
   const summary = buildDashboard(items, today, UPCOMING_DAYS, assetData.usage);
-  const [primary, ...otherCurrencies] = summary.totals;
-  const monthly = primary?.monthlyCents ?? 0;
-  const currency = primary?.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
   const increases = history ? findPriceIncreases(items, history).slice(0, MAX_PRICE_INCREASES) : [];
   const assetNames = new Map(assetData.assets.map((a) => [a.id, a.name]));
   const assetName = (id: number | null) => (id != null ? (assetNames.get(id) ?? null) : null);
   const staleReadings = vehiclesNeedingReading(assetData.assets, items, assetData.usage, today);
 
   return (
-    <TabScreen title="Overview">
-      <ThemedView type="backgroundElement" style={styles.card}>
-        <ThemedText type="small" themeColor="textSecondary">
-          Recurring costs
-        </ThemedText>
-        <View style={styles.totalRow}>
-          <ThemedText type="subtitle">{formatMoney(Math.round(monthly), currency)}</ThemedText>
-          <ThemedText themeColor="textSecondary">/ month</ThemedText>
-        </View>
-        <ThemedText type="small" themeColor="textSecondary">
-          {formatMoney(Math.round(monthly * 12), currency)} per year · {summary.activeCount} active
-          {summary.activeCount === 1 ? ' item' : ' items'}
-        </ThemedText>
-        {otherCurrencies.map((total) => (
-          <ThemedText key={total.currency} type="small" themeColor="textSecondary">
-            + {formatMoney(Math.round(total.monthlyCents), total.currency)} / month
-          </ThemedText>
-        ))}
-      </ThemedView>
+    <TabScreen title="Overview" brand>
+      <CostCard
+        title="Recurring costs"
+        totals={summary.totals}
+        currency={settings?.currency ?? DEFAULT_CURRENCY}
+        activeCount={summary.activeCount}
+        onPress={() => router.push('/costs')}
+      />
 
       {summary.needsAttention.length > 0 || staleReadings.length > 0 ? (
         <Section title="Needs attention">
-          {summary.needsAttention.map((due) => (
-            <ItemRow key={due.item.id} item={due.item} due={due} assetName={assetName(due.item.assetId)} />
+          {summary.needsAttention.map((due, index) => (
+            <ItemRow
+              key={due.item.id}
+              item={due.item}
+              due={due}
+              number={index + 1}
+              assetName={assetName(due.item.assetId)}
+            />
           ))}
           {staleReadings.map(({ asset, lastDate }) => (
             <AssetRow
@@ -98,8 +91,14 @@ export default function OverviewScreen() {
 
       <Section title={`Next ${UPCOMING_DAYS} days`}>
         {summary.upcoming.length > 0 ? (
-          summary.upcoming.map((due) => (
-            <ItemRow key={due.item.id} item={due.item} due={due} assetName={assetName(due.item.assetId)} />
+          summary.upcoming.map((due, index) => (
+            <ItemRow
+              key={due.item.id}
+              item={due.item}
+              due={due}
+              number={index + 1}
+              assetName={assetName(due.item.assetId)}
+            />
           ))
         ) : (
           <ThemedText themeColor="textSecondary">Nothing due in the next {UPCOMING_DAYS} days.</ThemedText>
@@ -125,10 +124,5 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     padding: Spacing.four,
     borderRadius: Spacing.four,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Spacing.two,
   },
 });

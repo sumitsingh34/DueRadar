@@ -9,7 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { todayISO } from '@/domain/dates';
 import { matchesAssetSearch, matchesSearch } from '@/domain/search';
-import { toDueItem } from '@/domain/summary';
+import { itemSections } from '@/domain/summary';
 import type { Asset } from '@/domain/types';
 import { formatDistance } from '@/domain/usage';
 import { useAssets } from '@/hooks/use-assets';
@@ -25,24 +25,7 @@ export default function ItemsScreen() {
   const today = todayISO();
   const assetNames = new Map(assetData.assets.map((a) => [a.id, a.name]));
   const assetName = (id: number | null) => (id != null ? (assetNames.get(id) ?? null) : null);
-  const rows = items.map((item) => ({ item, due: toDueItem(item, today, assetData.usage) }));
-  const active = rows.filter((r) => r.item.status === 'active');
-  const sections = [
-    {
-      key: 'active',
-      label: 'Active',
-      rows: active
-        .filter((r) => !r.due?.past)
-        .sort((a, b) => (a.due?.daysUntil ?? Infinity) - (b.due?.daysUntil ?? Infinity)),
-    },
-    // Appointments that are over, most recent first.
-    {
-      key: 'past',
-      label: 'Past',
-      rows: active.filter((r) => r.due?.past).sort((a, b) => b.due!.daysUntil - a.due!.daysUntil),
-    },
-    { key: 'inactive', label: 'Paused or cancelled', rows: rows.filter((r) => r.item.status !== 'active') },
-  ].filter((section) => section.rows.length > 0);
+  const sections = itemSections(items, today, assetData.usage);
 
   const searching = query.trim() !== '';
   const matches = sections.map((section) =>
@@ -90,11 +73,12 @@ export default function ItemsScreen() {
                 {index === 0 && searching && matchCount === 0 && assets.length === 0 ? (
                   <ThemedText themeColor="textSecondary">No items match “{query.trim()}”.</ThemedText>
                 ) : null}
-                {visible.map(({ item, due }) => (
+                {visible.map(({ item, due }, row) => (
                   <ItemRow
                     key={item.id}
                     item={item}
                     due={due}
+                    number={row + 1}
                     assetName={assetName(item.assetId)}
                     showActions
                   />

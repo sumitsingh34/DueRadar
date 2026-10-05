@@ -23,12 +23,13 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 
 Working now:
 
-- Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag
+- Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag. Deleting asks first, and leaving a form with unsaved changes asks whether to save them
 - Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (100+ common services, products, maintenance tasks and life admin)
 - Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
+- Costs by category: tap the recurring cost to see what each category costs a month and its share, then a category to see, edit or delete its items
 - Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
 - Price history: every cost change is recorded (for example $55 → $65 → $80), and the Overview lists the items whose price went up
-- All items: search by name, company, category or notes, with edit and delete on every row
+- All items: search by name, company, category or notes, with edit and delete on every row. Rows are numbered in their category's color
 - Warranties: purchase date, price, store, warranty length (1, 2, 3 or 5 years sets the end date) and a photo of the receipt, with reminders before the warranty ends
 - Home and vehicle maintenance: tasks that repeat when done, like an HVAC filter every 3 months or an oil change every 6 months or 10,000 km. Mark a task done and its next date counts from that day. Each time is kept in its history, with the cost and odometer reading
 - Vehicles and homes: group items under your car or home, keep the odometer up to date, and see services due by distance. From a few readings, DueRadar estimates when a distance will be reached and reminds you before then
@@ -52,7 +53,7 @@ Working now:
 | Photos     | `expo-image-picker` (camera or photo library), stored in the app's own folder |
 | Documents  | `expo-crypto` (AES-256-GCM) with the key in `expo-secure-store`     |
 | App lock   | `expo-local-authentication` (fingerprint, face or the phone's PIN)  |
-| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search, price insights, tasks and distances |
+| Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search, price insights, costs by category, tasks and distances |
 
 ## Project structure
 
@@ -62,6 +63,8 @@ src/
     (tabs)/       Overview, All items and Settings tabs
     item/         Add item (modal), Edit item and Mark as done screens
     asset/        Add or edit a vehicle or home, with its odometer and items
+    costs.tsx     Recurring costs by category
+    category/     A category's items
   attachments/    Picking and storing photos, and encrypting document photos
   components/     UI building blocks (form controls, item row, date field)
   db/             SQLite migrations, queries, settings and backup restore

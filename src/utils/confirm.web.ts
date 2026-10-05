@@ -14,6 +14,12 @@ export function chooseAsync<T>(
   return Promise.resolve(ok ? second.value : first.value);
 }
 
+/** The browser has only OK and Cancel, so this offers to leave without saving, or to stay. */
+export function askAboutUnsavedChanges(): Promise<'save' | 'discard' | 'keep'> {
+  const leave = window.confirm('Leave without saving?\n\nYour changes will be lost.');
+  return Promise.resolve(leave ? 'discard' : 'keep');
+}
+
 export function showMessage(title: string, message: string): void {
   window.alert(`${title}\n\n${message}`);
 }

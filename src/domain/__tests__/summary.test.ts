@@ -1,5 +1,14 @@
 import { makeItem, makeTask } from '@/domain/__fixtures__/items';
-import { buildDashboard, dueLabel, fullDueDate, shortDueDate, toDueItem } from '@/domain/summary';
+import {
+  buildDashboard,
+  costsByCategory,
+  dueLabel,
+  fullDueDate,
+  itemSections,
+  monthlyTotals,
+  shortDueDate,
+  toDueItem,
+} from '@/domain/summary';
 import type { Item } from '@/domain/types';
 import type { VehicleUsage } from '@/domain/usage';
 
@@ -172,5 +181,81 @@ describe('documents without an expiry date', () => {
     expect(toDueItem(certificate, TODAY)).toBeNull();
     const summary = buildDashboard([certificate], TODAY);
     expect(summary).toMatchObject({ activeCount: 1, upcoming: [], needsAttention: [] });
+  });
+});
+
+describe('monthlyTotals', () => {
+  it('counts active renewals and tasks, not one-time dates or paused items', () => {
+    const totals = monthlyTotals([
+      makeItem({ amountCents: 1200, intervalUnit: 'year' }),
+      makeTask({ amountCents: 6000 }),
+      makeItem({ amountCents: 999, status: 'paused' }),
+      makeItem({ scheduleType: 'expiry', intervalUnit: null, intervalCount: null }),
+      makeItem({ amountCents: null }),
+    ]);
+    expect(totals).toEqual([{ currency: 'USD', monthlyCents: 100 + 1000 }]);
+  });
+});
+
+describe('costsByCategory', () => {
+  const once = { scheduleType: 'expiry', intervalUnit: null, intervalCount: null } as const;
+
+  it('lists the most expensive categories first, then the ones with no recurring cost', () => {
+    const costs = costsByCategory(
+      [
+        makeItem({ category: 'warranty', ...once }),
+        makeItem({ category: 'subscription', amountCents: 1500 }),
+        makeItem({ category: 'subscription', amountCents: 500, status: 'cancelled' }),
+        makeItem({ category: 'insurance', amountCents: 6000 }),
+        makeItem({ category: 'subscription', amountCents: 500 }),
+      ],
+      'USD',
+    );
+    expect(costs.map((c) => [c.category.id, c.itemCount, c.totals])).toEqual([
+      ['insurance', 1, [{ currency: 'USD', monthlyCents: 6000 }]],
+      ['subscription', 3, [{ currency: 'USD', monthlyCents: 2000 }]],
+      ['warranty', 1, []],
+    ]);
+  });
+
+  it('puts costs in other currencies after the main one', () => {
+    const costs = costsByCategory(
+      [
+        makeItem({ category: 'membership', amountCents: 9000, currency: 'EUR' }),
+        makeItem({ category: 'software', amountCents: 100 }),
+        makeItem({ category: 'document', ...once }),
+      ],
+      'USD',
+    );
+    expect(costs.map((c) => c.category.id)).toEqual(['software', 'membership', 'document']);
+  });
+
+  it('counts an unknown category as Other', () => {
+    const costs = costsByCategory([makeItem({ category: 'pets' as Item['category'] })], 'USD');
+    expect(costs.map((c) => c.category.id)).toEqual(['other']);
+  });
+});
+
+describe('itemSections', () => {
+  const once = { scheduleType: 'expiry', intervalUnit: null, intervalCount: null } as const;
+
+  it('lists active items soonest first, then past appointments, then paused or cancelled ones', () => {
+    const later = makeItem({ name: 'Later', dueDate: '2026-12-01' });
+    const soon = makeItem({ name: 'Soon', dueDate: '2026-10-05' });
+    const undated = makeItem({ name: 'Birth certificate', category: 'document', ...once, dueDate: null });
+    const older = makeItem({ name: 'Dentist', category: 'appointment', ...once, dueDate: '2026-09-01' });
+    const recent = makeItem({ name: 'Doctor', category: 'appointment', ...once, dueDate: '2026-10-01' });
+    const paused = makeItem({ name: 'Paused', status: 'paused' });
+    const sections = itemSections([later, paused, older, undated, soon, recent], TODAY);
+    expect(sections.map((s) => [s.key, s.label, s.rows.map((r) => r.item.name)])).toEqual([
+      ['active', 'Active', ['Soon', 'Later', 'Birth certificate']],
+      ['past', 'Past', ['Doctor', 'Dentist']],
+      ['inactive', 'Paused or cancelled', ['Paused']],
+    ]);
+  });
+
+  it('leaves out empty sections', () => {
+    expect(itemSections([makeItem({ status: 'cancelled' })], TODAY).map((s) => s.key)).toEqual(['inactive']);
+    expect(itemSections([], TODAY)).toEqual([]);
   });
 });

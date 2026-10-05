@@ -9,7 +9,6 @@ import { ASSET_KINDS } from '@/domain/assets';
 import { todayISO } from '@/domain/dates';
 import { defaultDistanceUnit } from '@/domain/usage';
 import { useSettings } from '@/hooks/use-settings';
-import { goBack } from '@/utils/navigation';
 
 export default function NewAssetScreen() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
@@ -30,7 +29,6 @@ export default function NewAssetScreen() {
         submitLabel={presetKind ? `Add ${noun}` : 'Add'}
         onSubmit={async (input, reading) => {
           await createAsset(db, input, reading != null ? { reading, date: todayISO() } : null);
-          goBack();
         }}
       />
     </>

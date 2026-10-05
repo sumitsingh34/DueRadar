@@ -64,9 +64,8 @@ export default function AssetScreen() {
         : 'This can’t be undone.',
       'Delete',
     );
-    if (!confirmed) return;
-    await deleteAsset(db, asset.id);
-    goBack();
+    if (confirmed) await deleteAsset(db, asset.id);
+    return confirmed;
   };
 
   const header = (
@@ -86,8 +85,8 @@ export default function AssetScreen() {
               : 'Add maintenance like AC service or pest control, or home insurance.'}
           </ThemedText>
         ) : null}
-        {rows.map(({ item, due }) => (
-          <ItemRow key={item.id} item={item} due={due} />
+        {rows.map(({ item, due }, index) => (
+          <ItemRow key={item.id} item={item} due={due} number={index + 1} />
         ))}
         <Button
           title={`Add an item for ${asset.name}`}
@@ -119,10 +118,9 @@ export default function AssetScreen() {
         submitLabel="Save changes"
         onSubmit={async (input) => {
           await updateAsset(db, asset.id, input);
-          goBack();
         }}
+        onDelete={remove}
         header={header}
-        footer={<Button title={`Delete ${noun}`} variant="danger" onPress={remove} />}
       />
     </>
   );
