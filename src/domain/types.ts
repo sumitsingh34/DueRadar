@@ -30,6 +30,10 @@ export interface Item {
    * from it. Task: when it's next due. Expiry: the expiry date.
    */
   dueDate: string | null;
+  /** Time of day of a one-time date, such as an appointment, as `HH:MM`. */
+  dueTime: string | null;
+  /** Days before the date to remind, overriding the settings. Null follows the settings. */
+  reminderDays: number[] | null;
   /** Task: distance between services, e.g. 10000 (km). Needs a vehicle. */
   usageInterval: number | null;
   usageUnit: DistanceUnit | null;
@@ -62,6 +66,8 @@ export type ItemInput = Pick<
   | 'intervalCount'
   | 'startDate'
   | 'dueDate'
+  | 'dueTime'
+  | 'reminderDays'
   | 'usageInterval'
   | 'usageUnit'
   | 'nextUsage'

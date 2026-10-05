@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import type { PickedPhoto } from '@/attachments/pick';
 import { attachmentsSupported } from '@/attachments/storage';
+import { CategoryPicker } from '@/components/category-picker';
 import { DateField } from '@/components/date-field';
 import {
   Button,
@@ -14,13 +15,15 @@ import {
   TextField,
 } from '@/components/form-controls';
 import { ReceiptField } from '@/components/receipt-field';
+import { ReminderField } from '@/components/reminder-field';
 import { ThemedText } from '@/components/themed-text';
+import { TimeField } from '@/components/time-field';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { ASSET_KINDS, assetKindsLabel } from '@/domain/assets';
 import {
-  AVAILABLE_CATEGORIES,
   getCategory,
-  SCHEDULE_LABELS,
+  recurringWording,
+  scheduleLabel,
   type CategoryId,
 } from '@/domain/categories';
 import { addInterval, formatDate, todayISO } from '@/domain/dates';
@@ -31,6 +34,7 @@ import {
   type Frequency,
 } from '@/domain/frequency';
 import { centsToInput, DEFAULT_CURRENCY, parseAmountInput } from '@/domain/money';
+import { DEFAULT_SETTINGS } from '@/domain/settings';
 import {
   findTemplates,
   POPULAR_TEMPLATES,
@@ -41,6 +45,7 @@ import {
 import type { Asset, AssetKind, ItemInput, ItemStatus, ScheduleType } from '@/domain/types';
 import { formatDistance, parseDistanceInput } from '@/domain/usage';
 import { useAssets } from '@/hooks/use-assets';
+import { useSettings } from '@/hooks/use-settings';
 import { useTheme } from '@/hooks/use-theme';
 
 const STATUS_OPTIONS = [
@@ -51,10 +56,13 @@ const STATUS_OPTIONS = [
 
 const frequencyKey = (f: Frequency) => `${f.unit}:${f.count}`;
 
-/** Warranty length shortcuts; picking one sets the end date from the purchase date. */
-const WARRANTY_YEARS = [1, 2, 3, 5] as const;
-
 const NO_ASSET = 'none';
+
+/** The reminders a category suggests for a new item, or null to follow the settings. */
+const suggestedReminders = (id: CategoryId, schedule: ScheduleType): number[] | null => {
+  const days = getCategory(id).reminderDays?.[schedule];
+  return days ? [...days] : null;
+};
 
 /** What happened to the receipt photo while the form was open. */
 export interface ReceiptChange {
@@ -94,15 +102,15 @@ export function ItemForm({
 }: ItemFormProps) {
   const theme = useTheme();
   const assetData = useAssets();
+  const settings = useSettings();
   const assets = assetData?.assets ?? [];
   const currency = initial?.currency ?? defaultCurrency ?? DEFAULT_CURRENCY;
   const startCategory = initial?.category ?? defaultCategory ?? 'subscription';
+  const startSchedule = initial?.scheduleType ?? getCategory(startCategory).schedules[0];
   const [name, setName] = useState(initial?.name ?? '');
   const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
   const [category, setCategory] = useState<CategoryId>(startCategory);
-  const [schedule, setSchedule] = useState<ScheduleType>(
-    initial?.scheduleType ?? getCategory(startCategory).schedules[0],
-  );
+  const [schedule, setSchedule] = useState<ScheduleType>(startSchedule);
   const [amount, setAmount] = useState(
     initial?.amountCents != null ? centsToInput(initial.amountCents) : '',
   );
@@ -113,13 +121,22 @@ export function ItemForm({
   );
   const [startDate, setStartDate] = useState<string | null>(initial?.startDate ?? null);
   const [dueDate, setDueDate] = useState<string | null>(initial?.dueDate ?? null);
+  const [dueTime, setDueTime] = useState<string | null>(initial?.dueTime ?? null);
   // Whether a quick-add template filled in the due date, so another template may replace it.
   const [dueDateFromTemplate, setDueDateFromTemplate] = useState(false);
-  const [warrantyYears, setWarrantyYears] = useState<number | null>(() =>
+  // The length shortcut (e.g. a 2-year warranty) that matches the dates, if any.
+  const [lengthYears, setLengthYears] = useState<number | null>(() =>
     initial?.startDate && initial.dueDate
-      ? (WARRANTY_YEARS.find((y) => addInterval(initial.startDate!, 'year', y) === initial.dueDate) ?? null)
+      ? (getCategory(startCategory).lengthYears?.find(
+          (y) => addInterval(initial.startDate!, 'year', y) === initial.dueDate,
+        ) ?? null)
       : null,
   );
+  const [reminderDays, setReminderDays] = useState<number[] | null>(
+    initial ? initial.reminderDays : suggestedReminders(startCategory, startSchedule),
+  );
+  // Once the user picks reminders, changing the category no longer changes them.
+  const [remindersEdited, setRemindersEdited] = useState(initial != null);
   const [receipt, setReceipt] = useState<PickedPhoto | null>(initialReceipt);
   const [receiptChanged, setReceiptChanged] = useState(false);
   const [autoRenew, setAutoRenew] = useState(initial?.autoRenew ?? true);
@@ -144,15 +161,18 @@ export function ItemForm({
   const repeats = schedule !== 'expiry';
   const categoryInfo = getCategory(category);
   const wording = categoryInfo.wording;
+  const renewal = recurringWording(categoryInfo);
   // A start date (e.g. purchase date) only where the category has a name for it.
   const showStartDate = schedule === 'expiry' && wording?.startDate != null;
   const isWarranty = category === 'warranty' && schedule === 'expiry';
+  const lengthOptions = schedule === 'expiry' ? (categoryInfo.lengthYears ?? []) : [];
+  const showTime = schedule === 'expiry' && categoryInfo.time === true;
   const dueDateLabel =
     schedule === 'recurring'
-      ? 'Next renewal date'
+      ? renewal.dateLabel
       : schedule === 'task'
         ? 'Next due date'
-        : (wording?.expires ?? 'Expiry date');
+        : wording?.dueDate || wording?.expires || 'Expiry date';
   const providerLabel = wording?.provider ?? 'Company or store';
 
   // Vehicles and homes this category's items can belong to.
@@ -205,18 +225,26 @@ export function ItemForm({
 
   const changeStartDate = (date: string) => {
     setStartDate(date);
-    if (warrantyYears) setDueDate(addInterval(date, 'year', warrantyYears));
+    if (lengthYears) setDueDate(addInterval(date, 'year', lengthYears));
   };
   const changeDueDate = (date: string) => {
     setDueDate(date);
     setDueDateFromTemplate(false);
-    setWarrantyYears(null);
+    setLengthYears(null);
   };
-  const chooseWarrantyYears = (years: number) => {
+  const chooseLength = (years: number) => {
     const start = startDate ?? todayISO();
     setStartDate(start);
-    setWarrantyYears(years);
+    setLengthYears(years);
     setDueDate(addInterval(start, 'year', years));
+  };
+  const changeReminders = (days: number[] | null) => {
+    setReminderDays(days);
+    setRemindersEdited(true);
+  };
+  /** New items take the reminders a category suggests, until the user picks their own. */
+  const suggestReminders = (id: CategoryId, forSchedule: ScheduleType) => {
+    if (!remindersEdited) setReminderDays(suggestedReminders(id, forSchedule));
   };
   const changeReceipt = (photo: PickedPhoto | null) => {
     setReceipt(photo);
@@ -238,20 +266,25 @@ export function ItemForm({
   }
 
   // The category's schedule types, plus a saved one it no longer offers.
-  const scheduleOptions = categoryInfo.schedules.map((value) => ({ value, label: SCHEDULE_LABELS[value] }));
+  const scheduleOptions = categoryInfo.schedules.map((value) => ({
+    value,
+    label: scheduleLabel(categoryInfo, value),
+  }));
   if (!categoryInfo.schedules.includes(schedule)) {
-    scheduleOptions.push({ value: schedule, label: SCHEDULE_LABELS[schedule] });
+    scheduleOptions.push({ value: schedule, label: scheduleLabel(categoryInfo, schedule) });
   }
 
   /**
-   * Switches category. New items take the category's usual schedule, and the
-   * only vehicle or home there is when the category is about them. Returns
-   * the vehicle or home the item then belongs to.
+   * Switches category. New items take the category's usual schedule and
+   * reminders, and the only vehicle or home there is when the category is
+   * about them. Returns the vehicle or home the item then belongs to.
    */
   const applyCategory = (id: CategoryId, nextSchedule: ScheduleType): Asset | null => {
     setCategory(id);
     setSchedule(nextSchedule);
+    suggestReminders(id, nextSchedule);
     const info = getCategory(id);
+    if (info.lengthYears !== categoryInfo.lengthYears) setLengthYears(null);
     const kinds = info.assets?.kinds ?? [];
     const candidates = assets.filter((a) => kinds.includes(a.kind));
     let asset = candidates.find((a) => a.id === assetId) ?? null;
@@ -267,6 +300,7 @@ export function ItemForm({
 
   const chooseSchedule = (value: ScheduleType) => {
     setSchedule(value);
+    suggestReminders(category, value);
     fillDistance(selectedAsset, value);
   };
 
@@ -290,9 +324,8 @@ export function ItemForm({
       setDueDate(addInterval(todayISO(), template.frequency.unit, template.frequency.count));
       setDueDateFromTemplate(true);
     }
-    if (nextSchedule === 'expiry' && template.warrantyYears) chooseWarrantyYears(template.warrantyYears);
-
     const asset = applyCategory(template.category, nextSchedule);
+    if (nextSchedule === 'expiry' && template.warrantyYears) chooseLength(template.warrantyYears);
     // Kept for when a vehicle is chosen later, since the distance depends on its unit.
     setPendingDistance(template.distance ?? null);
     if (template.distance && asset?.kind === 'vehicle') {
@@ -315,13 +348,11 @@ export function ItemForm({
     }
     if (!dueDate) {
       next.dueDate =
-        schedule === 'recurring'
-          ? 'Choose the next renewal date.'
-          : schedule === 'task'
-            ? 'Choose when it’s next due.'
-            : isWarranty
-              ? 'Choose when the warranty ends.'
-              : 'Choose the expiry date.';
+        schedule === 'task'
+          ? 'Choose when it’s next due.'
+          : isWarranty
+            ? 'Choose when the warranty ends.'
+            : `Choose the ${dueDateLabel.toLowerCase()}.`;
     } else if (showStartDate && startDate && dueDate < startDate) {
       next.dueDate = `This is before the ${wording?.startDate?.toLowerCase() ?? 'start date'}.`;
     }
@@ -352,6 +383,8 @@ export function ItemForm({
           // Hidden fields keep what was saved before.
           startDate: showStartDate ? startDate : (initial?.startDate ?? null),
           dueDate,
+          dueTime: showTime ? dueTime : null,
+          reminderDays,
           usageInterval: distance ? interval : null,
           usageUnit: distance ? unit : null,
           nextUsage: distance ? dueAt : null,
@@ -370,10 +403,10 @@ export function ItemForm({
 
   const costLabel =
     schedule === 'recurring'
-      ? `Cost per renewal (${currency})`
+      ? `${renewal.costLabel} (${currency})`
       : schedule === 'task'
         ? `Cost each time (${currency}, optional)`
-        : `Price paid (${currency}, optional)`;
+        : `${isWarranty ? 'Price paid' : 'Cost'} (${currency}, optional)`;
 
   return (
     <ScrollView
@@ -411,12 +444,7 @@ export function ItemForm({
         </FormField>
 
         <FormField label="Category">
-          <ChipGroup
-            accessibilityLabel="Category"
-            options={AVAILABLE_CATEGORIES.map((c) => ({ value: c.id, label: c.label, color: c.color }))}
-            value={category}
-            onChange={chooseCategory}
-          />
+          <CategoryPicker value={category} onChange={chooseCategory} />
         </FormField>
 
         {showAssets ? (
@@ -514,16 +542,16 @@ export function ItemForm({
           </FormField>
         ) : null}
 
-        {isWarranty ? (
-          <FormField label="Warranty length">
+        {lengthOptions.length > 0 ? (
+          <FormField label={wording?.length ?? 'Length'}>
             <ChipGroup
-              accessibilityLabel="Warranty length"
-              options={WARRANTY_YEARS.map((y) => ({
+              accessibilityLabel={wording?.length ?? 'Length'}
+              options={lengthOptions.map((y) => ({
                 value: String(y),
                 label: y === 1 ? '1 year' : `${y} years`,
               }))}
-              value={warrantyYears ? String(warrantyYears) : null}
-              onChange={(value) => chooseWarrantyYears(Number(value))}
+              value={lengthYears ? String(lengthYears) : null}
+              onChange={(value) => chooseLength(Number(value))}
             />
           </FormField>
         ) : null}
@@ -531,6 +559,12 @@ export function ItemForm({
         <FormField label={dueDateLabel} error={errors.dueDate}>
           <DateField value={dueDate} onChange={changeDueDate} accessibilityLabel={dueDateLabel} />
         </FormField>
+
+        {showTime ? (
+          <FormField label="Time (optional)">
+            <TimeField value={dueTime} onChange={setDueTime} accessibilityLabel="Time" />
+          </FormField>
+        ) : null}
 
         {vehicle && usageInterval.trim() ? (
           <FormField label={`Next due at (${unit})`} error={errors.nextUsage}>
@@ -551,16 +585,21 @@ export function ItemForm({
 
         {recurring ? (
           <SwitchRow
-            label="Renews automatically"
-            description={
-              autoRenew
-                ? 'The renewal date moves forward on its own.'
-                : 'Shown as overdue until you mark it renewed.'
-            }
+            label={renewal.autoLabel}
+            description={autoRenew ? renewal.autoOn : renewal.autoOff}
             value={autoRenew}
             onValueChange={setAutoRenew}
           />
         ) : null}
+
+        <FormField label="Reminders">
+          <ReminderField
+            value={reminderDays}
+            onChange={changeReminders}
+            settingsDays={settings?.reminderDays ?? DEFAULT_SETTINGS.reminderDays}
+            remindersEnabled={settings?.remindersEnabled ?? true}
+          />
+        </FormField>
 
         {initial ? (
           <FormField label="Status">

@@ -1,5 +1,13 @@
 import { getCategory } from './categories';
-import { addInterval, formatDate, fromISODate, nextOccurrenceOnOrAfter, toISODate } from './dates';
+import {
+  addInterval,
+  atTime,
+  formatDate,
+  formatTime,
+  fromISODate,
+  nextOccurrenceOnOrAfter,
+  toISODate,
+} from './dates';
 import type { IntervalUnit } from './dates';
 import { formatMoney } from './money';
 import type { AppSettings } from './settings';
@@ -22,14 +30,17 @@ export const MAX_SCHEDULED = 60;
 /** Schedule this far ahead so reminders keep coming even if the app isn't opened for a while. */
 export const HORIZON_DAYS = 400;
 const MAX_OCCURRENCES_PER_ITEM = 24;
+/** A reminder on the day of something with a time, like an appointment, comes at least this long before it. */
+const SAME_DAY_LEAD_MS = 60 * 60 * 1000;
 
 /** Shortest possible length of one period, used to skip reminders longer than the period. */
 const MIN_PERIOD_DAYS: Record<IntervalUnit, number> = { day: 1, week: 7, month: 28, year: 365 };
 
 /**
- * Every reminder to schedule from `now`, soonest first. A reminder is skipped
- * when it is at least as long as the billing period, so a monthly bill never
- * gets a "30 days before" reminder right after its previous renewal.
+ * Every reminder to schedule from `now`, soonest first. Items use their own
+ * reminder days when they have them, and the settings otherwise. A reminder
+ * is skipped when it is at least as long as the billing period, so a monthly
+ * bill never gets a "30 days before" reminder right after its previous renewal.
  */
 export function planReminders(
   items: readonly Item[],
@@ -37,7 +48,7 @@ export function planReminders(
   now: Date,
   usage?: UsageMap,
 ): PlannedReminder[] {
-  if (!settings.remindersEnabled || settings.reminderDays.length === 0) return [];
+  if (!settings.remindersEnabled) return [];
 
   const today = toISODate(now);
   const horizon = addInterval(today, 'day', HORIZON_DAYS);
@@ -45,11 +56,18 @@ export function planReminders(
 
   for (const item of items) {
     if (item.status !== 'active') continue;
+    const reminderDays = item.reminderDays ?? settings.reminderDays;
+    if (reminderDays.length === 0) continue;
     for (const { date, estimated } of upcomingDueDates(item, today, horizon, usage)) {
-      for (const daysBefore of settings.reminderDays) {
+      for (const daysBefore of reminderDays) {
         if (!fitsPeriod(item, daysBefore)) continue;
         const fireAt = fromISODate(addInterval(date, 'day', -daysBefore));
         fireAt.setHours(settings.reminderHour, 0, 0, 0);
+        // On the day itself, come early enough for something at a set time.
+        if (daysBefore === 0 && item.dueTime && date === item.dueDate) {
+          const lead = atTime(date, item.dueTime).getTime() - SAME_DAY_LEAD_MS;
+          if (lead < fireAt.getTime()) fireAt.setTime(lead);
+        }
         if (fireAt.getTime() <= now.getTime()) continue;
         planned.push({
           itemId: item.id,
@@ -92,7 +110,7 @@ function upcomingDueDates(
   }
 
   const due = toDueItem(item, today, usage);
-  if (!due || due.overdue) return [];
+  if (!due || due.overdue || due.past) return [];
   if (due.dueDate >= today) return [{ date: due.dueDate, estimated: due.estimated }];
   return dueDate >= today ? [{ date: dueDate, estimated: false }] : [];
 }
@@ -103,7 +121,7 @@ function fitsPeriod(item: Item, daysBefore: number): boolean {
 }
 
 function reminderText(item: Item, dueDate: string, daysBefore: number, estimated: boolean) {
-  const when = estimated
+  let when = estimated
     ? daysBefore === 0
       ? 'about now'
       : daysBefore === 1
@@ -114,11 +132,16 @@ function reminderText(item: Item, dueDate: string, daysBefore: number, estimated
       : daysBefore === 1
         ? 'tomorrow'
         : `in ${daysBefore} days`;
-  const expires = getCategory(item.category).wording?.expires?.toLowerCase() ?? 'expires';
+  const time = item.dueTime && dueDate === item.dueDate ? formatTime(item.dueTime) : null;
+  if (time && daysBefore <= 1) when += ` at ${time}`;
+
+  const expires = (getCategory(item.category).wording?.expires ?? 'Expires').toLowerCase();
   const verb =
     item.scheduleType === 'expiry'
-      ? expires
-      : item.scheduleType === 'recurring' && item.autoRenew
+      ? expires === 'due'
+        ? 'is due'
+        : expires
+      : item.scheduleType === 'recurring' && item.autoRenew && getCategory(item.category).recurringWord !== 'due'
         ? 'renews'
         : 'is due';
   const price = item.amountCents != null ? formatMoney(item.amountCents, item.currency) : null;
@@ -126,10 +149,9 @@ function reminderText(item: Item, dueDate: string, daysBefore: number, estimated
     item.scheduleType === 'task' && item.nextUsage != null && item.usageUnit
       ? `at ${formatDistance(item.nextUsage, item.usageUnit)}`
       : null;
+  const date = `${estimated ? 'around ' : ''}${formatDate(dueDate)}${time ? `, ${time}` : ''}`;
   return {
-    title: `${item.name} ${verb} ${when}`,
-    body: [price, estimated ? `around ${formatDate(dueDate)}` : formatDate(dueDate), distance]
-      .filter(Boolean)
-      .join(' · '),
+    title: [item.name, verb, when].filter(Boolean).join(' '),
+    body: [price, date, distance, item.provider].filter(Boolean).join(' · '),
   };
 }

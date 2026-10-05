@@ -10,7 +10,8 @@ title: DueRadar
 
 DueRadar is a free, open-source app that makes sure you never miss a renewal, price increase or
 expiry. Keep track of subscriptions, memberships, insurance, phone plans, domains, card annual
-fees, warranties and the upkeep of your home and car in one place.
+fees, warranties, the upkeep of your home and car, and life admin like licenses, appointments,
+rent and taxes in one place.
 
 <!-- gallery:start -->
 <link rel="stylesheet" href="assets/gallery.css">
@@ -45,7 +46,10 @@ fees, warranties and the upkeep of your home and car in one place.
 - Home and car upkeep: tasks that repeat when done, like an oil change every 6 months or
   10,000 km, with a history of each time
 - Your vehicles and homes, with the odometer, and services due by distance
-- Quick-add for 80+ common services, products and maintenance tasks, and search
+- Life admin: licenses and certifications, appointments with a time, rent and lease ends, and tax
+  deadlines
+- Reminders of your choosing for any item, like 3 months before a lease ends
+- Quick-add for 100+ common services, products, tasks and life admin, and search
 - Export a backup and restore it on a new phone
 
 ## Private by design

@@ -24,7 +24,7 @@ DueRadar is a free, open-source app that makes sure you never miss a renewal, pr
 Working now:
 
 - Add, edit and delete items with cost, frequency, next renewal or expiry date, and an auto-renew flag
-- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (80+ common services, products and maintenance tasks)
+- Quick-add: start typing "Net…" and pick Netflix to fill in the category and frequency (100+ common services, products, maintenance tasks and life admin)
 - Overview with monthly and yearly recurring cost, what's due in the next 30 days, and what needs attention
 - Auto-renewing items move to their next date by themselves. Manual renewals are flagged as overdue until you mark them renewed
 - Price history: every cost change is recorded (for example $55 → $65 → $80), and the Overview lists the items whose price went up
@@ -32,14 +32,15 @@ Working now:
 - Warranties: purchase date, price, store, warranty length (1, 2, 3 or 5 years sets the end date) and a photo of the receipt, with reminders before the warranty ends
 - Home and vehicle maintenance: tasks that repeat when done, like an HVAC filter every 3 months or an oil change every 6 months or 10,000 km. Mark a task done and its next date counts from that day. Each time is kept in its history, with the cost and odometer reading
 - Vehicles and homes: group items under your car or home, keep the odometer up to date, and see services due by distance. From a few readings, DueRadar estimates when a distance will be reached and reminds you before then
-- Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. A reminder longer than the billing period is skipped
+- Life admin: licenses and certifications (with an issue date and "valid for" length), appointments with a time of day, rent and lease ends, and tax deadlines you mark as done each time. Past appointments move to their own list instead of showing as overdue
+- Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. Any item can have its own reminders instead, such as 3 months before a lease ends. A reminder on the day of an appointment comes at least an hour before it. A reminder longer than the billing period is skipped
 - Backup: export a JSON backup (including receipt photos, vehicles and history) or a CSV spreadsheet, and restore from a backup on a new phone
 - Your currency for new items (USD, EUR, GBP, INR and more)
 - Light and dark mode. Runs on iOS, Android and the web (reminders need the phone app)
 
 Planned:
 
-- Licenses and life admin (V4), and an optional encrypted document vault (V5)
+- An optional encrypted document vault (V5)
 
 ## Tech stack
 
@@ -79,12 +80,11 @@ Everything you track is an **item** with a key date. One shared table covers the
 
 | Table            | Purpose                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
-| `items`          | Name, category, cost, schedule, due date (and for vehicle tasks, distance), status, and the vehicle or home it belongs to |
+| `items`          | Name, category, cost, schedule, due date and time (and for vehicle tasks, distance), status, its own reminder days, and the vehicle or home it belongs to |
 | `price_history`  | Each price an item has had, with the date it took effect                                          |
 | `completions`    | Each time a task was done or a renewal confirmed, with the cost, odometer reading and a note      |
 | `assets`         | Vehicles and homes that items can belong to, with a vehicle's odometer unit                       |
 | `usage_readings` | Odometer readings of each vehicle                                                                 |
-| `reminders`      | Reserved for per-item reminder settings                                                           |
 | `attachments`    | Receipt photos (and later, documents) stored in the app's private storage                        |
 | `settings`       | App preferences, such as the default currency                                                     |
 
@@ -92,7 +92,7 @@ An item's schedule is one of:
 
 - `recurring`: renews on a fixed schedule, like a subscription. Its next date is always computed from the date you entered, so a bill on the 31st comes back to the 31st after a short month instead of drifting to the 28th.
 - `task`: repeats a set time after it's done, like an HVAC filter. Marking it done moves the next date to that day plus the interval. A vehicle's task can also be due by distance (whichever comes first), and the average distance per day from recent odometer readings estimates when that will be.
-- `expiry`: a single date, like a warranty or passport.
+- `expiry`: a single date, like a warranty, a license or an appointment. An appointment's date can have a time, and once it has passed it's simply over instead of overdue.
 
 Dates are stored as local `YYYY-MM-DD` strings and amounts as integer cents.
 

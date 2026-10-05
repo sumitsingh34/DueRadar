@@ -8,7 +8,7 @@ permalink: /privacy/
 _Last updated: October 5, 2026_
 
 DueRadar is a free, open-source app for keeping track of subscriptions, renewals, warranties,
-home and car maintenance, and expiry dates. It is designed to work without collecting anything about you.
+home and car maintenance, licenses, appointments and other dates that matter. It is designed to work without collecting anything about you.
 
 ## In short
 

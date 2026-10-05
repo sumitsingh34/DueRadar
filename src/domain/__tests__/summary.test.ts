@@ -1,5 +1,5 @@
 import { makeItem, makeTask } from '@/domain/__fixtures__/items';
-import { buildDashboard, dueLabel, toDueItem } from '@/domain/summary';
+import { buildDashboard, dueLabel, fullDueDate, shortDueDate, toDueItem } from '@/domain/summary';
 import type { Item } from '@/domain/types';
 import type { VehicleUsage } from '@/domain/usage';
 
@@ -126,5 +126,42 @@ describe('tasks', () => {
     const summary = buildDashboard([makeTask()], TODAY, 30, usageOf({ readingDate: '2026-06-01', perDay: 100 }));
     expect(summary.upcoming).toHaveLength(1);
     expect(summary.needsAttention).toHaveLength(0);
+  });
+});
+
+describe('life admin wording', () => {
+  const label = (overrides: Partial<Item>) => dueLabel(toDueItem(makeItem(overrides), TODAY)!);
+  const once = { scheduleType: 'expiry' as const, intervalUnit: null, intervalCount: null };
+
+  it('words appointments without a verb', () => {
+    const appointment = { ...once, category: 'appointment' as const };
+    expect(label({ ...appointment, dueDate: '2026-10-06' })).toBe('In 3 days');
+    expect(label({ ...appointment, dueDate: TODAY })).toBe('Today');
+    expect(label({ ...appointment, dueDate: '2026-10-04' })).toBe('Tomorrow');
+    expect(label({ ...appointment, dueDate: '2026-10-02' })).toBe('Yesterday');
+    expect(label({ ...appointment, dueDate: '2026-09-30' })).toBe('3 days ago');
+  });
+
+  it('words leases and taxes as due, and lease ends as ending', () => {
+    expect(label({ category: 'lease', dueDate: '2026-10-08' })).toBe('Due in 5 days');
+    expect(label({ category: 'tax', autoRenew: false, dueDate: '2026-10-01' })).toBe('Overdue by 2 days');
+    expect(label({ ...once, category: 'lease', dueDate: '2027-06-01' })).toBe('Ends in 8 months');
+    expect(label({ ...once, category: 'tax', dueDate: '2026-10-01' })).toBe('Was due 2 days ago');
+  });
+
+  it('treats a past appointment as over, not as needing attention', () => {
+    const past = makeItem({ ...once, category: 'appointment', dueDate: '2026-10-01' });
+    const expired = makeItem({ ...once, category: 'license', dueDate: '2026-10-01' });
+    expect(toDueItem(past, TODAY)).toMatchObject({ past: true, overdue: false });
+    const summary = buildDashboard([past, expired], TODAY);
+    expect(summary.needsAttention.map((d) => d.item)).toEqual([expired]);
+    expect(summary.upcoming).toEqual([]);
+  });
+
+  it('shows the time of an appointment with its date', () => {
+    const due = toDueItem(makeItem({ ...once, category: 'appointment', dueDate: '2026-10-06', dueTime: '14:30' }), TODAY)!;
+    expect(shortDueDate(due, TODAY)).toMatch(/^Oct 6, 2:30\sPM$/);
+    expect(fullDueDate(due)).toMatch(/^Oct 6, 2026, 2:30\sPM$/);
+    expect(shortDueDate(toDueItem(makeItem({ dueDate: '2027-01-02' }), TODAY)!, TODAY)).toBe('Jan 2, 2027');
   });
 });

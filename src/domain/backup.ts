@@ -1,8 +1,8 @@
-import { CATEGORIES, getCategory, SCHEDULE_LABELS, type CategoryId } from './categories';
-import { isISODate, type IntervalUnit } from './dates';
+import { CATEGORIES, getCategory, type CategoryId } from './categories';
+import { isISODate, isTime, type IntervalUnit } from './dates';
 import { frequencyLabel } from './frequency';
 import { monthlyEquivalentCents } from './money';
-import { normalizeSettings, type AppSettings } from './settings';
+import { normalizeReminderDays, normalizeSettings, type AppSettings } from './settings';
 import { hasInterval, nextDueDate } from './summary';
 import type {
   Asset,
@@ -18,9 +18,10 @@ import type {
 
 /**
  * Format 2 added receipt photos. Format 3 added vehicles and homes, odometer
- * readings and task history. Older backups are still accepted.
+ * readings and task history. Format 4 added times of day and each item's own
+ * reminders. Older backups are still accepted.
  */
-export const BACKUP_FORMAT = 3;
+export const BACKUP_FORMAT = 4;
 
 /** A receipt photo in a backup, with the file itself as base64. */
 export interface BackupAttachment {
@@ -194,6 +195,12 @@ const CSV_HEADER = [
   'Next due at',
 ];
 
+const CSV_TYPES: Record<ScheduleType, string> = {
+  recurring: 'Renews',
+  task: 'Repeats when done',
+  expiry: 'Expires',
+};
+
 /** A spreadsheet-friendly export. The JSON backup is the one to restore from. */
 export function itemsToCsv(items: readonly Item[], today: string, assets: readonly Asset[] = []): string {
   const assetNames = new Map(assets.map((a) => [a.id, a.name]));
@@ -207,11 +214,11 @@ export function itemsToCsv(items: readonly Item[], today: string, assets: readon
     return [
       item.name,
       getCategory(item.category).label,
-      item.scheduleType === 'expiry' ? 'Expires' : SCHEDULE_LABELS[item.scheduleType],
+      CSV_TYPES[item.scheduleType],
       item.amountCents != null ? (item.amountCents / 100).toFixed(2) : '',
       item.currency,
       frequency ? frequencyLabel(frequency) : '',
-      nextDueDate(item, today) ?? '',
+      [nextDueDate(item, today), item.dueTime].filter(Boolean).join(' '),
       item.startDate ?? '',
       item.scheduleType === 'recurring' ? (item.autoRenew ? 'Yes' : 'No') : '',
       item.status[0].toUpperCase() + item.status.slice(1),
@@ -256,6 +263,8 @@ function parseItem(raw: unknown, index: number): Item {
     intervalCount: intervalUnit && intervalCount ? intervalCount : null,
     startDate: optionalDate(raw.startDate),
     dueDate: optionalDate(raw.dueDate),
+    dueTime: typeof raw.dueTime === 'string' && isTime(raw.dueTime) ? raw.dueTime : null,
+    reminderDays: normalizeReminderDays(raw.reminderDays),
     usageInterval: isPositiveInt(raw.usageInterval) ? raw.usageInterval : null,
     usageUnit: isDistanceUnit(raw.usageUnit) ? raw.usageUnit : null,
     nextUsage: isCents(raw.nextUsage) ? raw.nextUsage : null,

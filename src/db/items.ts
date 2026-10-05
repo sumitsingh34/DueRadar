@@ -6,6 +6,7 @@ import { emitDataChanged } from '@/db/events';
 import type { CategoryId } from '@/domain/categories';
 import { nextAfterDone, nextAfterRenewal } from '@/domain/completion';
 import { todayISO, type IntervalUnit } from '@/domain/dates';
+import { normalizeReminderDays } from '@/domain/settings';
 import type {
   Completion,
   DistanceUnit,
@@ -27,6 +28,8 @@ interface ItemRow {
   interval_count: number | null;
   start_date: string | null;
   due_date: string | null;
+  due_time: string | null;
+  reminder_days: string | null;
   usage_interval: number | null;
   usage_unit: string | null;
   next_usage: number | null;
@@ -271,6 +274,8 @@ function toColumns(input: ItemInput): Record<string, SQLiteBindValue> {
     interval_count: repeats ? input.intervalCount : null,
     start_date: input.startDate,
     due_date: input.dueDate,
+    due_time: input.scheduleType === 'expiry' ? input.dueTime : null,
+    reminder_days: input.reminderDays ? JSON.stringify(input.reminderDays) : null,
     usage_interval: distance ? input.usageInterval : null,
     usage_unit: distance ? input.usageUnit : null,
     next_usage: distance ? input.nextUsage : null,
@@ -294,6 +299,8 @@ function toItem(row: ItemRow): Item {
     intervalCount: row.interval_count,
     startDate: row.start_date,
     dueDate: row.due_date,
+    dueTime: row.due_time,
+    reminderDays: parseReminderDays(row.reminder_days),
     usageInterval: row.usage_interval,
     usageUnit: row.usage_unit as DistanceUnit | null,
     nextUsage: row.next_usage,
@@ -319,6 +326,15 @@ function toCompletion(row: CompletionRow): Completion {
     usage: row.usage_reading,
     note: row.note,
   };
+}
+
+function parseReminderDays(json: string | null): number[] | null {
+  if (json == null) return null;
+  try {
+    return normalizeReminderDays(JSON.parse(json));
+  } catch {
+    return null;
+  }
 }
 
 function parseDetails(json: string): Record<string, unknown> {

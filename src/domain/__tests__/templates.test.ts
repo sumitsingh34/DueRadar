@@ -6,7 +6,7 @@ describe('findTemplates', () => {
 
   it('puts names that start with the query first', () => {
     expect(names('net')[0]).toBe('Netflix');
-    expect(names('in')[0]).toBe('Internet');
+    expect(names('in').slice(0, 2)).toEqual(['Income tax return', 'Internet']);
     expect(names('disney')).toEqual(['Disney+']);
   });
 
@@ -32,14 +32,10 @@ describe('templates', () => {
     expect(POPULAR_TEMPLATES.every(Boolean)).toBe(true);
   });
 
-  it('are either something that renews, a task, or a product with a warranty', () => {
+  it('give warranties a length, and only warranties', () => {
     for (const template of TEMPLATES) {
-      if (template.category === 'warranty') {
-        expect(template.warrantyYears).toBeGreaterThan(0);
-        expect(template.frequency).toBeUndefined();
-      } else {
-        expect(template.frequency).toBeDefined();
-      }
+      expect(template.warrantyYears != null).toBe(template.category === 'warranty');
+      if (template.category === 'warranty') expect(template.frequency).toBeUndefined();
     }
     expect(findTemplates('lap')).toEqual([{ name: 'Laptop', category: 'warranty', warrantyYears: 1 }]);
   });

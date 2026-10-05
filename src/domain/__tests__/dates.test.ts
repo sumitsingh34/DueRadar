@@ -1,10 +1,14 @@
 import {
   addInterval,
+  atTime,
   daysBetween,
   formatShortDate,
+  formatTime,
   isISODate,
+  isTime,
   nextOccurrenceOnOrAfter,
   toISODate,
+  toTimeString,
 } from '@/domain/dates';
 
 describe('formatShortDate', () => {
@@ -75,5 +79,15 @@ describe('ISO conversion', () => {
 
   it('uses the local calendar date', () => {
     expect(toISODate(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
+  });
+});
+
+describe('times of day', () => {
+  it('validates and converts HH:MM times', () => {
+    expect(['00:00', '09:30', '23:59'].every(isTime)).toBe(true);
+    expect(['24:00', '9:30', '12:60', ''].some(isTime)).toBe(false);
+    expect(toTimeString(new Date(2026, 0, 1, 7, 5))).toBe('07:05');
+    expect(atTime('2026-10-08', '14:30')).toEqual(new Date(2026, 9, 8, 14, 30));
+    expect(formatTime('14:30').replace(/\s/g, ' ')).toBe('2:30 PM');
   });
 });

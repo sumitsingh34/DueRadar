@@ -91,9 +91,10 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
     for (const item of backup.items) {
       await db.runAsync(
         `INSERT INTO items (id, name, category, schedule_type, amount_cents, currency,
-          interval_unit, interval_count, start_date, due_date, usage_interval, usage_unit,
-          next_usage, auto_renew, status, provider, notes, details, asset_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          interval_unit, interval_count, start_date, due_date, due_time, reminder_days,
+          usage_interval, usage_unit, next_usage, auto_renew, status, provider, notes, details,
+          asset_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         item.id,
         item.name,
         item.category,
@@ -104,6 +105,8 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
         item.intervalCount,
         item.startDate,
         item.dueDate,
+        item.dueTime,
+        item.reminderDays ? JSON.stringify(item.reminderDays) : null,
         item.usageInterval,
         item.usageUnit,
         item.nextUsage,

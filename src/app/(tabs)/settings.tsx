@@ -179,7 +179,8 @@ export default function SettingsScreen() {
               </FormField>
               <ThemedText type="small" themeColor="textSecondary">
                 Reminders longer than the billing period are skipped, so a monthly bill never gets
-                a 30-day reminder.
+                a 30-day reminder. An item can have its own reminders, such as 3 months before a
+                lease ends: set them when you edit it.
               </ThemedText>
               {permission === 'undetermined' ? (
                 <Button title="Allow notifications" onPress={allowNotifications} disabled={busy} />

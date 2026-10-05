@@ -22,9 +22,10 @@ import {
   updateItem,
 } from '@/db/items';
 import { ASSET_KINDS } from '@/domain/assets';
+import { getCategory, recurringWording } from '@/domain/categories';
 import { formatDate, todayISO } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import { dueLabel, toDueItem } from '@/domain/summary';
+import { dueLabel, fullDueDate, toDueItem } from '@/domain/summary';
 import type { Completion, Item, PricePoint } from '@/domain/types';
 import { formatDistance } from '@/domain/usage';
 import { useAssets } from '@/hooks/use-assets';
@@ -108,6 +109,7 @@ export default function EditItemScreen() {
     due != null &&
     due.daysUntil <= RENEW_WINDOW_DAYS;
   const canMarkDone = active && item.scheduleType === 'task';
+  const renewal = recurringWording(getCategory(item.category));
 
   const remove = async () => {
     const confirmed = await confirmAsync(
@@ -137,9 +139,8 @@ export default function EditItemScreen() {
     <ThemedView type="backgroundElement" style={styles.card}>
       {due && active ? (
         <View style={styles.block}>
-          <ThemedText themeColor={due.overdue ? 'danger' : 'text'}>
-            {dueLabel(due)} · {due.estimated ? 'around ' : ''}
-            {formatDate(due.dueDate)}
+          <ThemedText themeColor={due.overdue ? 'danger' : due.past ? 'textSecondary' : 'text'}>
+            {dueLabel(due)} · {fullDueDate(due)}
           </ThemedText>
           {due.distance ? (
             <ThemedText type="small" themeColor="textSecondary">
@@ -184,7 +185,7 @@ export default function EditItemScreen() {
       {completions.length > 0 ? (
         <View style={styles.block}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            {item.scheduleType === 'task' ? 'Done' : 'Renewed'}
+            {item.scheduleType === 'task' ? 'Done' : renewal.history}
           </ThemedText>
           {completions.slice(0, HISTORY_SHOWN).map((c) => (
             <ThemedText key={c.id} type="small">
@@ -207,7 +208,7 @@ export default function EditItemScreen() {
       ) : null}
       {canMarkRenewed ? (
         <Button
-          title="Mark as renewed"
+          title={renewal.confirm}
           onPress={() => {
             markRenewed(db, item).catch((error) => showMessage('Couldn’t save', String(error)));
           }}

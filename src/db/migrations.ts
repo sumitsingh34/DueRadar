@@ -118,6 +118,17 @@ const MIGRATIONS: readonly ((db: SQLiteDatabase) => Promise<void>)[] = [
       UPDATE items SET schedule_type = 'task' WHERE schedule_type = 'usage';
     `);
   },
+
+  // v3 (V4 life admin): a time of day for appointments, and each item's own
+  // reminder days as a JSON list (NULL follows the settings). The unused
+  // reminders table, planned for those reminder days, is dropped.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE items ADD COLUMN due_time TEXT;
+      ALTER TABLE items ADD COLUMN reminder_days TEXT;
+      DROP TABLE reminders;
+    `);
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

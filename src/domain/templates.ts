@@ -4,8 +4,9 @@ import type { DistanceUnit, ScheduleType } from './types';
 
 /**
  * Quick-add presets: something that renews, a task that repeats when done,
- * or a product with a warranty. Prices are left out on purpose: they differ by
- * country and plan, and they change often.
+ * or a one-time date such as a warranty, a lease end or an appointment.
+ * Prices are left out on purpose: they differ by country and plan, and they
+ * change often.
  */
 export interface ItemTemplate {
   name: string;
@@ -124,21 +125,52 @@ export const TEMPLATES: readonly ItemTemplate[] = [
   { name: 'Emissions test', category: 'vehicle', frequency: YEARLY, task: true },
   { name: 'Vehicle registration', category: 'vehicle', frequency: YEARLY, autoRenew: false },
   { name: 'Vehicle inspection', category: 'vehicle', frequency: YEARLY, autoRenew: false },
+  // Leases and rent. A lease end is a single date; rent repeats.
+  { name: 'Rent', category: 'lease', frequency: MONTHLY },
+  { name: 'Apartment lease', category: 'lease' },
+  { name: 'Car lease', category: 'lease' },
+  { name: 'Storage unit', category: 'lease', frequency: MONTHLY },
+  { name: 'Parking', category: 'lease', frequency: MONTHLY },
+  { name: 'HOA fees', category: 'lease', frequency: MONTHLY },
+  // Taxes, which you mark as done each time.
+  { name: 'Income tax return', category: 'tax', frequency: YEARLY, autoRenew: false },
+  { name: 'Property tax', category: 'tax', frequency: YEARLY, autoRenew: false },
+  { name: 'Estimated tax', category: 'tax', frequency: QUARTERLY, autoRenew: false },
+  { name: 'Advance tax', category: 'tax', frequency: QUARTERLY, autoRenew: false },
+  { name: 'Road tax', category: 'tax', frequency: YEARLY, autoRenew: false },
+  // Licenses and certifications: the expiry date is on the card.
+  { name: "Driver's license", category: 'license' },
+  { name: 'Professional license', category: 'license' },
+  { name: 'Certification', category: 'license' },
+  { name: 'CPR certification', category: 'license' },
+  { name: 'First aid certificate', category: 'license' },
+  { name: 'Business license', category: 'license', frequency: YEARLY, autoRenew: false },
+  { name: 'Fishing license', category: 'license', frequency: YEARLY, autoRenew: false },
+  { name: 'Pet license', category: 'license', frequency: YEARLY, autoRenew: false },
+  // Appointments, and checkups that repeat after each visit.
+  { name: 'Doctor appointment', category: 'appointment' },
+  { name: 'Dentist appointment', category: 'appointment' },
+  { name: 'Dental checkup', category: 'appointment', frequency: HALF_YEARLY, task: true },
+  { name: 'Eye exam', category: 'appointment', frequency: YEARLY, task: true },
+  { name: 'Health checkup', category: 'appointment', frequency: YEARLY, task: true },
+  { name: 'Pet vaccination', category: 'appointment', frequency: YEARLY, task: true },
+  { name: 'Haircut', category: 'appointment', frequency: MONTHLY, task: true },
 ];
 
-/** Shown before the user types anything. */
+/** Shown before the user types anything: a few from each kind of item. */
 export const POPULAR_TEMPLATES: readonly ItemTemplate[] = [
   'Netflix',
   'Spotify',
   'Amazon Prime',
-  'Costco',
   'Phone plan',
   'Internet',
   'Car insurance',
-  'Gym membership',
+  'Rent',
   'Laptop',
   'Oil change',
   'AC service',
+  "Driver's license",
+  'Dental checkup',
 ].map((name) => TEMPLATES.find((t) => t.name === name)!);
 
 /** The kind of schedule a template sets up. */

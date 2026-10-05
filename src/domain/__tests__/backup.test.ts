@@ -20,6 +20,7 @@ describe('backup round trip', () => {
         makeItem({ id: 1, name: 'Car', provider: 'Toyota', notes: 'Line 1\nLine 2' }),
         makeItem({ id: 2, name: 'Car insurance', parentId: 1, autoRenew: false, assetId: 7 }),
         makeTask({ id: 3, assetId: 7 }),
+        makeItem({ id: 4, name: 'Dentist', category: 'appointment', scheduleType: 'expiry', dueTime: '14:30', reminderDays: [1, 0] }),
       ],
       priceHistory: [{ itemId: 1, amountCents: 1000, currency: 'USD', effectiveDate: '2026-10-01' }],
       attachments: [
@@ -192,5 +193,20 @@ describe('itemsToCsv', () => {
     expect(row).toBe(
       'Oil change,Vehicle,Repeats when done,45.00,USD,Every 6 months,2027-04-01,,,Active,,,7.50,Honda Civic,10000 km,50000 km',
     );
+  });
+});
+
+describe('backup times and reminders', () => {
+  it('keeps valid ones and drops the rest', () => {
+    const backup = {
+      ...createBackup(EMPTY),
+      items: [
+        { ...makeItem({ id: 1 }), dueTime: '25:00', reminderDays: 'soon' },
+        { ...makeItem({ id: 2 }), dueTime: '09:05', reminderDays: [7, 30, 7, -1] },
+      ],
+    };
+    const [bad, good] = parseBackup(JSON.stringify(backup)).items;
+    expect(bad).toMatchObject({ dueTime: null, reminderDays: null });
+    expect(good).toMatchObject({ dueTime: '09:05', reminderDays: [30, 7] });
   });
 });

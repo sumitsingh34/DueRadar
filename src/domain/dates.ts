@@ -105,6 +105,31 @@ export function formatShortDate(iso: string, todayIso: string): string {
   });
 }
 
+const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Whether a value is a 24-hour `HH:MM` time of day. */
+export function isTime(value: string): boolean {
+  return TIME.test(value);
+}
+
+/** The local time of day of a JS Date, as `HH:MM`. */
+export function toTimeString(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+/** A date at a `HH:MM` time of day, in local time. */
+export function atTime(iso: string, time: string): Date {
+  const date = fromISODate(iso);
+  const [, h, m] = TIME.exec(time) ?? [];
+  date.setHours(Number(h ?? 0), Number(m ?? 0), 0, 0);
+  return date;
+}
+
+/** "10:30 AM", or "10:30" where the device uses a 24-hour clock. */
+export function formatTime(time: string): string {
+  return atTime('2000-01-01', time).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 function parse(iso: string): { y: number; m: number; d: number } {
   const match = ISO_DATE.exec(iso);
   if (!match) throw new Error(`Invalid date: ${iso}`);

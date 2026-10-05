@@ -26,13 +26,20 @@ export default function ItemsScreen() {
   const assetNames = new Map(assetData.assets.map((a) => [a.id, a.name]));
   const assetName = (id: number | null) => (id != null ? (assetNames.get(id) ?? null) : null);
   const rows = items.map((item) => ({ item, due: toDueItem(item, today, assetData.usage) }));
+  const active = rows.filter((r) => r.item.status === 'active');
   const sections = [
     {
       key: 'active',
       label: 'Active',
-      rows: rows
-        .filter((r) => r.item.status === 'active')
+      rows: active
+        .filter((r) => !r.due?.past)
         .sort((a, b) => (a.due?.daysUntil ?? Infinity) - (b.due?.daysUntil ?? Infinity)),
+    },
+    // Appointments that are over, most recent first.
+    {
+      key: 'past',
+      label: 'Past',
+      rows: active.filter((r) => r.due?.past).sort((a, b) => b.due!.daysUntil - a.due!.daysUntil),
     },
     { key: 'inactive', label: 'Paused or cancelled', rows: rows.filter((r) => r.item.status !== 'active') },
   ].filter((section) => section.rows.length > 0);

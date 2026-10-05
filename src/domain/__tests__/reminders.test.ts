@@ -122,3 +122,68 @@ describe('planReminders for tasks', () => {
     expect(planReminders([makeTask({ dueDate: '2026-10-01' })], SETTINGS, NOW, usage(null))).toEqual([]);
   });
 });
+
+describe('planReminders with an item’s own reminders', () => {
+  it('uses them instead of the settings', () => {
+    const lease = makeItem({
+      name: 'Apartment lease',
+      category: 'lease',
+      scheduleType: 'expiry',
+      intervalUnit: null,
+      intervalCount: null,
+      dueDate: '2027-01-31',
+      reminderDays: [90, 60, 30],
+    });
+    expect(planReminders([lease], SETTINGS, NOW).map((r) => [r.title, r.daysBefore])).toEqual([
+      ['Apartment lease ends in 90 days', 90],
+      ['Apartment lease ends in 60 days', 60],
+      ['Apartment lease ends in 30 days', 30],
+    ]);
+  });
+
+  it('still reminds when the settings have no days, and not at all for an empty list', () => {
+    const item = makeItem({ intervalUnit: 'year', autoRenew: false, dueDate: '2026-11-01', reminderDays: [7] });
+    expect(planReminders([item], { ...SETTINGS, reminderDays: [] }, NOW)).toHaveLength(1);
+    expect(planReminders([{ ...item, reminderDays: [] }], SETTINGS, NOW)).toEqual([]);
+  });
+
+  it('reminds early enough on the day of an appointment, with its time', () => {
+    const dentist = makeItem({
+      name: 'Dentist',
+      category: 'appointment',
+      scheduleType: 'expiry',
+      intervalUnit: null,
+      intervalCount: null,
+      amountCents: null,
+      provider: 'Dr. Lee',
+      dueDate: '2026-10-08',
+      dueTime: '08:30',
+      reminderDays: [1, 0],
+    });
+    const plan = planReminders([dentist], SETTINGS, NOW);
+    expect(plan.map((r) => [r.title.replace(/\s/g, ' '), r.fireAt.getTime()])).toEqual([
+      ['Dentist tomorrow at 8:30 AM', at(2026, 10, 7)],
+      ['Dentist today at 8:30 AM', new Date(2026, 9, 8, 7, 30).getTime()],
+    ]);
+    expect(plan[0].body).toContain('Dr. Lee');
+    // An afternoon appointment keeps the usual reminder time.
+    const later = planReminders([{ ...dentist, dueTime: '15:00' }], SETTINGS, NOW);
+    expect(later[1].fireAt.getTime()).toBe(at(2026, 10, 8));
+  });
+
+  it('does not remind about past appointments', () => {
+    const past = makeItem({
+      category: 'appointment',
+      scheduleType: 'expiry',
+      intervalUnit: null,
+      intervalCount: null,
+      dueDate: '2026-10-01',
+    });
+    expect(planReminders([past], SETTINGS, NOW)).toEqual([]);
+  });
+
+  it('words rent as due, even when it repeats automatically', () => {
+    const rent = makeItem({ name: 'Rent', category: 'lease', dueDate: '2026-10-20' });
+    expect(planReminders([rent], SETTINGS, NOW)[0].title).toBe('Rent is due in 7 days');
+  });
+});

@@ -9,7 +9,9 @@ WHAT YOU GET
 • Warranties: purchase date, store, price and a photo of the receipt, with a reminder before the warranty ends
 • Home and car upkeep: HVAC filters, AC service, pest control, oil changes. Mark a task done and the next date counts from that day
 • Your vehicles, with the odometer: services due every 6 months or 10,000 km, whichever comes first
-• Quick-add for 80+ popular services, products and maintenance tasks: type "Net" and pick Netflix
+• Life admin: driver's license and certifications, appointments, rent and lease ends, tax deadlines
+• Reminders of your choosing for any item, like 3 months before your lease ends
+• Quick-add for 100+ popular services, products and tasks: type "Net" and pick Netflix
 • Auto-renewals move forward on their own. Manual renewals stay flagged until you mark them renewed
 • Search, with edit and delete right from the list
 • Your currency: ₹, $, €, £ and more

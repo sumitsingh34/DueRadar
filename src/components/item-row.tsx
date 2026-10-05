@@ -7,10 +7,10 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { deleteItem } from '@/db/items';
 import { getCategory } from '@/domain/categories';
-import { formatShortDate, todayISO } from '@/domain/dates';
+import { todayISO } from '@/domain/dates';
 import { costSuffix } from '@/domain/frequency';
 import { formatMoney } from '@/domain/money';
-import { dueLabel, type DueItem } from '@/domain/summary';
+import { dueLabel, shortDueDate, type DueItem } from '@/domain/summary';
 import type { Item } from '@/domain/types';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmAsync } from '@/utils/confirm';
@@ -38,10 +38,7 @@ export function ItemRow({
 
   const statusLabel = STATUS_LABELS[item.status];
   const subtitle =
-    statusLabel ??
-    (due
-      ? `${dueLabel(due)} · ${due.estimated ? '≈ ' : ''}${formatShortDate(due.dueDate, todayISO())}`
-      : 'No date set');
+    statusLabel ?? (due ? `${dueLabel(due)} · ${shortDueDate(due, todayISO())}` : 'No date set');
 
   let price: string | null = null;
   if (item.amountCents != null) {

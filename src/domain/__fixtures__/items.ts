@@ -15,6 +15,8 @@ export function makeItem(overrides: Partial<Item> = {}): Item {
     intervalCount: 1,
     startDate: null,
     dueDate: '2026-10-10',
+    dueTime: null,
+    reminderDays: null,
     usageInterval: null,
     usageUnit: null,
     nextUsage: null,

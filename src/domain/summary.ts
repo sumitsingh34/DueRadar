@@ -1,5 +1,5 @@
-import { getCategory } from './categories';
-import { daysBetween, nextOccurrenceOnOrAfter } from './dates';
+import { getCategory, recurringWording } from './categories';
+import { daysBetween, formatDate, formatShortDate, formatTime, nextOccurrenceOnOrAfter } from './dates';
 import { monthlyEquivalentCents } from './money';
 import type { Item } from './types';
 import { distanceDue, formatDistance, type DistanceDue, type UsageMap } from './usage';
@@ -15,6 +15,8 @@ export interface DueItem {
   daysUntil: number;
   /** Past its date or, for a vehicle task, past its distance. */
   overdue: boolean;
+  /** A one-time date that's simply over, like an appointment. Never overdue. */
+  past: boolean;
   /** A vehicle task's distance status, when the vehicle has a reading. */
   distance: DistanceDue | null;
   /** Whether `dueDate` is an estimate from the vehicle's average daily distance. */
@@ -68,11 +70,14 @@ export function toDueItem(item: Item, today: string, usage?: UsageMap): DueItem 
     dueDate = distance.date;
     estimated = distance.left > 0;
   }
+  const past =
+    scheduledDays < 0 && item.scheduleType === 'expiry' && getCategory(item.category).pastIsDone === true;
   return {
     item,
     dueDate,
     daysUntil: daysBetween(today, dueDate),
-    overdue: scheduledDays < 0 || (distance != null && distance.left <= 0),
+    overdue: !past && (scheduledDays < 0 || (distance != null && distance.left <= 0)),
+    past,
     distance,
     estimated,
     scheduledDays,
@@ -89,17 +94,41 @@ export function dueLabel(due: DueItem): string {
   if (item.scheduleType === 'task') return taskLabel(due);
 
   const daysUntil = due.scheduledDays;
-  const wording = getCategory(item.category).wording;
-  const verb = item.scheduleType === 'expiry' ? (wording?.expires ?? 'Expires') : 'Renews';
-  if (daysUntil === 0) return `${verb} today`;
-  if (daysUntil === 1) return `${verb} tomorrow`;
-  if (daysUntil > 1) return `${verb} in ${describeDays(daysUntil)}`;
+  const category = getCategory(item.category);
+  const wording = category.wording;
+  const verb =
+    item.scheduleType === 'expiry' ? (wording?.expires ?? 'Expires') : recurringWording(category).verb;
+  if (daysUntil === 0) return phrase(verb, 'today');
+  if (daysUntil === 1) return phrase(verb, 'tomorrow');
+  if (daysUntil > 1) return phrase(verb, `in ${describeDays(daysUntil)}`);
   const ago = -daysUntil;
   if (item.scheduleType === 'expiry') {
     const past = wording?.expired ?? 'Expired';
-    return `${past} ${ago === 1 ? 'yesterday' : `${describeDays(ago)} ago`}`;
+    return phrase(past, ago === 1 ? 'yesterday' : `${describeDays(ago)} ago`);
   }
   return `Overdue by ${describeDays(ago)}`;
+}
+
+/**
+ * The due date for a list, e.g. "Nov 4", "Nov 4, 10:30 AM" for an
+ * appointment, or "≈ Nov 4" when estimated from distance.
+ */
+export function shortDueDate(due: DueItem, today: string): string {
+  return `${due.estimated ? '≈ ' : ''}${formatShortDate(due.dueDate, today)}${timeSuffix(due)}`;
+}
+
+/** The due date in full, e.g. "Nov 4, 2026" or "Nov 4, 2026, 10:30 AM". */
+export function fullDueDate(due: DueItem): string {
+  return `${due.estimated ? 'around ' : ''}${formatDate(due.dueDate)}${timeSuffix(due)}`;
+}
+
+function timeSuffix({ item, dueDate }: DueItem): string {
+  return item.dueTime && dueDate === item.dueDate ? `, ${formatTime(item.dueTime)}` : '';
+}
+
+/** "Renews in 5 days", or without a verb, as for an appointment, "In 5 days". */
+function phrase(verb: string, rest: string): string {
+  return verb ? `${verb} ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 
 function taskLabel({ distance, scheduledDays }: DueItem): string {
@@ -149,7 +178,7 @@ export function buildDashboard(
       .map(([currency, monthlyCents]) => ({ currency, monthlyCents }))
       .sort((a, b) => b.monthlyCents - a.monthlyCents),
     activeCount: active.length,
-    upcoming: due.filter((d) => !d.overdue && d.daysUntil <= windowDays),
+    upcoming: due.filter((d) => !d.overdue && !d.past && d.daysUntil <= windowDays),
     needsAttention: due.filter((d) => d.overdue),
   };
 }
