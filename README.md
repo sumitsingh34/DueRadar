@@ -80,7 +80,8 @@ src/
   utils/          Dialogs, navigation, saving and opening files
 docs/             Website and privacy policy (GitHub Pages)
 fastlane/         Google Play listing text and graphics
-scripts/          Icon generator (make-icons.js)
+scripts/          Icon generator (make-icons.js), and sample data for store
+                  screenshots (make-sample-backup.js)
 ```
 
 ## Data model
