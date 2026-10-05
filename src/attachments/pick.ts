@@ -6,19 +6,19 @@ export interface PickedPhoto {
   mimeType: string | null;
 }
 
-// Receipts only need to be readable, so keep files small.
+// Receipts and documents only need to be readable, so keep files small.
 const OPTIONS: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6 };
 
-export async function takeReceiptPhoto(): Promise<PickedPhoto | null> {
+export async function takePhoto(): Promise<PickedPhoto | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
-    throw new Error('DueRadar needs the camera to photograph a receipt. You can allow it in your phone’s settings.');
+    throw new Error('DueRadar needs the camera to take the photo. You can allow it in your phone’s settings.');
   }
   return toPicked(await ImagePicker.launchCameraAsync(OPTIONS));
 }
 
 /** Android 13+ shows the system photo picker, which needs no permission. */
-export async function chooseReceiptPhoto(): Promise<PickedPhoto | null> {
+export async function choosePhoto(): Promise<PickedPhoto | null> {
   return toPicked(await ImagePicker.launchImageLibraryAsync(OPTIONS));
 }
 

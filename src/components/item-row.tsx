@@ -38,7 +38,12 @@ export function ItemRow({
 
   const statusLabel = STATUS_LABELS[item.status];
   const subtitle =
-    statusLabel ?? (due ? `${dueLabel(due)} · ${shortDueDate(due, todayISO())}` : 'No date set');
+    statusLabel ??
+    (due
+      ? `${dueLabel(due)} · ${shortDueDate(due, todayISO())}`
+      : getCategory(item.category).dateOptional
+        ? 'No expiry'
+        : 'No date set');
 
   let price: string | null = null;
   if (item.amountCents != null) {

@@ -11,7 +11,7 @@ title: DueRadar
 DueRadar is a free, open-source app that makes sure you never miss a renewal, price increase or
 expiry. Keep track of subscriptions, memberships, insurance, phone plans, domains, card annual
 fees, warranties, the upkeep of your home and car, and life admin like licenses, appointments,
-rent and taxes in one place.
+rent, taxes and documents in one place.
 
 <!-- gallery:start -->
 <link rel="stylesheet" href="assets/gallery.css">
@@ -49,6 +49,9 @@ rent and taxes in one place.
 - Life admin: licenses and certifications, appointments with a time, rent and lease ends, and tax
   deadlines
 - Reminders of your choosing for any item, like 3 months before a lease ends
+- Documents: your passport, visa and ID cards with their expiry dates, and optional photos that
+  are encrypted on your phone
+- An app lock with your fingerprint, face or phone PIN
 - Quick-add for 100+ common services, products, tasks and life admin, and search
 - Export a backup and restore it on a new phone
 

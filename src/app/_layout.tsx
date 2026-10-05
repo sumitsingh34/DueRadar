@@ -1,9 +1,9 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SQLiteProvider } from 'expo-sqlite';
-import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { AppLock } from '@/components/app-lock';
 import { ReminderSync } from '@/components/reminder-sync';
 import { DATABASE_NAME, migrateDbIfNeeded } from '@/db/migrations';
 import { configureNotifications } from '@/notifications/reminders';
@@ -17,7 +17,8 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       {/* Children render only after migrations finish. */}
       <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrateDbIfNeeded}>
-        <HideSplashWhenReady />
+        {/* Hides the splash screen once it knows whether to show the lock screen. */}
+        <AppLock />
         <ReminderSync />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -30,11 +31,4 @@ export default function RootLayout() {
       </SQLiteProvider>
     </ThemeProvider>
   );
-}
-
-function HideSplashWhenReady() {
-  useEffect(() => {
-    SplashScreen.hideAsync();
-  }, []);
-  return null;
 }

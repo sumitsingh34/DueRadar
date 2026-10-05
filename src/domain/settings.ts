@@ -8,6 +8,8 @@ export interface AppSettings {
   reminderDays: number[];
   /** Local hour of day (0–23) reminders are delivered. */
   reminderHour: number;
+  /** Whether opening the app asks for the fingerprint, face or phone PIN. */
+  appLock: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -15,6 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   remindersEnabled: true,
   reminderDays: [30, 7, 1],
   reminderHour: 9,
+  appLock: false,
 };
 
 export const REMINDER_DAY_OPTIONS = [30, 14, 7, 3, 1, 0] as const;
@@ -36,7 +39,7 @@ export const CURRENCY_OPTIONS = [
 
 /** Builds valid settings from untrusted values (stored rows or a backup file). */
 export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
-  const { currency, remindersEnabled, reminderDays, reminderHour } = raw;
+  const { currency, remindersEnabled, reminderDays, reminderHour, appLock } = raw;
   return {
     currency:
       typeof currency === 'string' && /^[A-Z]{3}$/.test(currency)
@@ -49,6 +52,7 @@ export function normalizeSettings(raw: Record<string, unknown>): AppSettings {
       Number.isInteger(reminderHour) && (reminderHour as number) >= 0 && (reminderHour as number) <= 23
         ? (reminderHour as number)
         : DEFAULT_SETTINGS.reminderHour,
+    appLock: appLock === true,
   };
 }
 

@@ -4,7 +4,7 @@ import { StyleSheet } from 'react-native';
 
 import { ItemForm } from '@/components/item-form';
 import { ThemedView } from '@/components/themed-view';
-import { setReceipt } from '@/db/attachments';
+import { saveDocumentPhotos, setReceipt } from '@/db/attachments';
 import { emitDataChanged } from '@/db/events';
 import { createItem } from '@/db/items';
 import { CATEGORIES, type CategoryId } from '@/domain/categories';
@@ -32,13 +32,20 @@ export default function NewItemScreen() {
       defaultCategory={category}
       defaultAssetId={Number.isInteger(assetId) && assetId > 0 ? assetId : undefined}
       submitLabel="Add item"
-      onSubmit={async (input, receipt) => {
+      onSubmit={async (input, files) => {
         const id = await createItem(db, input);
-        if (receipt.photo) {
+        if (files.receipt) {
           try {
-            await setReceipt(db, id, receipt.photo);
+            await setReceipt(db, id, files.receipt);
           } catch (error) {
             showMessage('Saved, but the receipt wasn’t', error instanceof Error ? error.message : String(error));
+          }
+        }
+        if (files.photos.length > 0) {
+          try {
+            await saveDocumentPhotos(db, id, files.photos);
+          } catch (error) {
+            showMessage('Saved, but the photos weren’t', error instanceof Error ? error.message : String(error));
           }
         }
         // Ask for notification permission when it first matters: right after saving something.

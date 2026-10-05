@@ -6,6 +6,7 @@ import type { PickedPhoto } from '@/attachments/pick';
 import { attachmentsSupported } from '@/attachments/storage';
 import { CategoryPicker } from '@/components/category-picker';
 import { DateField } from '@/components/date-field';
+import { DocumentPhotosField } from '@/components/document-photos-field';
 import {
   Button,
   ChipButtons,
@@ -19,6 +20,7 @@ import { ReminderField } from '@/components/reminder-field';
 import { ThemedText } from '@/components/themed-text';
 import { TimeField } from '@/components/time-field';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import type { DocumentPhoto } from '@/db/attachments';
 import { ASSET_KINDS, assetKindsLabel } from '@/domain/assets';
 import {
   getCategory,
@@ -57,6 +59,7 @@ const STATUS_OPTIONS = [
 const frequencyKey = (f: Frequency) => `${f.unit}:${f.count}`;
 
 const NO_ASSET = 'none';
+const NO_PHOTOS: DocumentPhoto[] = [];
 
 /** The reminders a category suggests for a new item, or null to follow the settings. */
 const suggestedReminders = (id: CategoryId, schedule: ScheduleType): number[] | null => {
@@ -64,23 +67,27 @@ const suggestedReminders = (id: CategoryId, schedule: ScheduleType): number[] | 
   return days ? [...days] : null;
 };
 
-/** What happened to the receipt photo while the form was open. */
-export interface ReceiptChange {
-  photo: PickedPhoto | null;
-  changed: boolean;
+/** The photos in the form when it's saved, and whether they changed. */
+export interface FileChanges {
+  receipt: PickedPhoto | null;
+  receiptChanged: boolean;
+  photos: DocumentPhoto[];
+  photosChanged: boolean;
 }
 
 interface ItemFormProps {
   initial?: ItemInput;
   /** The item's saved receipt photo, if it has one. */
   initialReceipt?: PickedPhoto | null;
+  /** The item's saved document photos, decrypted. */
+  initialPhotos?: DocumentPhoto[];
   /** Currency for a new item. Edits keep the item's own currency. */
   defaultCurrency?: string;
   /** Category and vehicle or home for a new item, e.g. when adding from a vehicle's page. */
   defaultCategory?: CategoryId;
   defaultAssetId?: number;
   submitLabel: string;
-  onSubmit: (input: ItemInput, receipt: ReceiptChange) => Promise<void>;
+  onSubmit: (input: ItemInput, files: FileChanges) => Promise<void>;
   /** Extra content shown above the fields, e.g. renewal status. */
   header?: ReactNode;
   /** Extra content shown below the save button, e.g. a delete button. */
@@ -92,6 +99,7 @@ type Errors = Partial<Record<'name' | 'amount' | 'dueDate' | 'usageInterval' | '
 export function ItemForm({
   initial,
   initialReceipt = null,
+  initialPhotos = NO_PHOTOS,
   defaultCurrency,
   defaultCategory,
   defaultAssetId,
@@ -139,6 +147,10 @@ export function ItemForm({
   const [remindersEdited, setRemindersEdited] = useState(initial != null);
   const [receipt, setReceipt] = useState<PickedPhoto | null>(initialReceipt);
   const [receiptChanged, setReceiptChanged] = useState(false);
+  const [photos, setPhotos] = useState<DocumentPhoto[]>(initialPhotos);
+  const [photosChanged, setPhotosChanged] = useState(false);
+  // Some documents, like a birth certificate, never expire.
+  const [hasDate, setHasDate] = useState(initial ? initial.dueDate != null : true);
   const [autoRenew, setAutoRenew] = useState(initial?.autoRenew ?? true);
   const [status, setStatus] = useState<ItemStatus>(initial?.status ?? 'active');
   const [provider, setProvider] = useState(initial?.provider ?? '');
@@ -165,8 +177,11 @@ export function ItemForm({
   // A start date (e.g. purchase date) only where the category has a name for it.
   const showStartDate = schedule === 'expiry' && wording?.startDate != null;
   const isWarranty = category === 'warranty' && schedule === 'expiry';
-  const lengthOptions = schedule === 'expiry' ? (categoryInfo.lengthYears ?? []) : [];
-  const showTime = schedule === 'expiry' && categoryInfo.time === true;
+  // Whether the item has a due date: always, except a document that never expires.
+  const canSkipDate = schedule === 'expiry' && categoryInfo.dateOptional === true;
+  const dated = !canSkipDate || hasDate;
+  const lengthOptions = schedule === 'expiry' && dated ? (categoryInfo.lengthYears ?? []) : [];
+  const showTime = schedule === 'expiry' && dated && categoryInfo.time === true;
   const dueDateLabel =
     schedule === 'recurring'
       ? renewal.dateLabel
@@ -250,6 +265,10 @@ export function ItemForm({
     setReceipt(photo);
     setReceiptChanged(true);
   };
+  const changePhotos = (next: DocumentPhoto[]) => {
+    setPhotos(next);
+    setPhotosChanged(true);
+  };
   const changeUsageInterval = (text: string) => {
     setUsageInterval(text);
     suggestNextUsage(parseDistanceInput(text), vehicle);
@@ -326,6 +345,7 @@ export function ItemForm({
     }
     const asset = applyCategory(template.category, nextSchedule);
     if (nextSchedule === 'expiry' && template.warrantyYears) chooseLength(template.warrantyYears);
+    setHasDate(!template.noDate);
     // Kept for when a vehicle is chosen later, since the distance depends on its unit.
     setPendingDistance(template.distance ?? null);
     if (template.distance && asset?.kind === 'vehicle') {
@@ -346,14 +366,14 @@ export function ItemForm({
       amountCents = parseAmountInput(amount);
       if (amountCents == null) next.amount = 'Enter an amount like 15.99.';
     }
-    if (!dueDate) {
+    if (dated && !dueDate) {
       next.dueDate =
         schedule === 'task'
           ? 'Choose when it’s next due.'
           : isWarranty
             ? 'Choose when the warranty ends.'
             : `Choose the ${dueDateLabel.toLowerCase()}.`;
-    } else if (showStartDate && startDate && dueDate < startDate) {
+    } else if (dated && dueDate && showStartDate && startDate && dueDate < startDate) {
       next.dueDate = `This is before the ${wording?.startDate?.toLowerCase() ?? 'start date'}.`;
     }
     let interval: number | null = null;
@@ -382,9 +402,9 @@ export function ItemForm({
           intervalCount: repeats ? frequency.count : null,
           // Hidden fields keep what was saved before.
           startDate: showStartDate ? startDate : (initial?.startDate ?? null),
-          dueDate,
+          dueDate: dated ? dueDate : null,
           dueTime: showTime ? dueTime : null,
-          reminderDays,
+          reminderDays: dated ? reminderDays : null,
           usageInterval: distance ? interval : null,
           usageUnit: distance ? unit : null,
           nextUsage: distance ? dueAt : null,
@@ -394,7 +414,7 @@ export function ItemForm({
           notes,
           assetId: showAssets ? (selectedAsset?.id ?? null) : null,
         },
-        { photo: receipt, changed: receiptChanged },
+        { receipt, receiptChanged, photos, photosChanged },
       );
     } finally {
       setSaving(false);
@@ -556,9 +576,20 @@ export function ItemForm({
           </FormField>
         ) : null}
 
-        <FormField label={dueDateLabel} error={errors.dueDate}>
-          <DateField value={dueDate} onChange={changeDueDate} accessibilityLabel={dueDateLabel} />
-        </FormField>
+        {canSkipDate ? (
+          <SwitchRow
+            label="Has an expiry date"
+            description={hasDate ? undefined : 'Kept without a date, like a birth certificate.'}
+            value={hasDate}
+            onValueChange={setHasDate}
+          />
+        ) : null}
+
+        {dated ? (
+          <FormField label={dueDateLabel} error={errors.dueDate}>
+            <DateField value={dueDate} onChange={changeDueDate} accessibilityLabel={dueDateLabel} />
+          </FormField>
+        ) : null}
 
         {showTime ? (
           <FormField label="Time (optional)">
@@ -592,14 +623,16 @@ export function ItemForm({
           />
         ) : null}
 
-        <FormField label="Reminders">
-          <ReminderField
-            value={reminderDays}
-            onChange={changeReminders}
-            settingsDays={settings?.reminderDays ?? DEFAULT_SETTINGS.reminderDays}
-            remindersEnabled={settings?.remindersEnabled ?? true}
-          />
-        </FormField>
+        {dated ? (
+          <FormField label="Reminders">
+            <ReminderField
+              value={reminderDays}
+              onChange={changeReminders}
+              settingsDays={settings?.reminderDays ?? DEFAULT_SETTINGS.reminderDays}
+              remindersEnabled={settings?.remindersEnabled ?? true}
+            />
+          </FormField>
+        ) : null}
 
         {initial ? (
           <FormField label="Status">
@@ -624,6 +657,16 @@ export function ItemForm({
         {categoryInfo.receipts && attachmentsSupported ? (
           <FormField label="Receipt (optional)">
             <ReceiptField value={receipt} onChange={changeReceipt} />
+          </FormField>
+        ) : null}
+
+        {categoryInfo.documentPhotos && attachmentsSupported ? (
+          <FormField label="Photos of the document (optional)">
+            <DocumentPhotosField
+              value={photos}
+              onChange={changePhotos}
+              appLockOn={settings?.appLock ?? false}
+            />
           </FormField>
         ) : null}
 

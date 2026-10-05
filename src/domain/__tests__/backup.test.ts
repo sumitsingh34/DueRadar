@@ -210,3 +210,20 @@ describe('backup times and reminders', () => {
     expect(good).toMatchObject({ dueTime: '09:05', reminderDays: [30, 7] });
   });
 });
+
+describe('backup document photos', () => {
+  it('keeps them apart from receipts, even with the same file name', () => {
+    const photo = { itemId: 1, fileName: '1-1.jpg', mimeType: 'image/jpeg', createdAt: '2026-10-05T00:00:00.000Z', data: 'aGVsbG8=' };
+    const backup = {
+      ...createBackup(EMPTY),
+      items: [makeItem({ id: 1, category: 'document', scheduleType: 'expiry', dueDate: null })],
+      attachments: [
+        { ...photo, kind: 'receipt' },
+        { ...photo, kind: 'document' },
+        { ...photo, kind: 'document' },
+        { ...photo, kind: 'contract' },
+      ],
+    };
+    expect(parseBackup(JSON.stringify(backup)).attachments.map((a) => a.kind)).toEqual(['receipt', 'document']);
+  });
+});

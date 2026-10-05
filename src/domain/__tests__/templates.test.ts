@@ -56,3 +56,12 @@ describe('templates', () => {
     }
   });
 });
+
+describe('document templates', () => {
+  it('only skip the date for documents that never expire', () => {
+    for (const template of TEMPLATES.filter((t) => t.noDate)) {
+      expect(getCategory(template.category).dateOptional).toBe(true);
+    }
+    expect(TEMPLATES.find((t) => t.name === 'Passport')).toEqual({ name: 'Passport', category: 'document' });
+  });
+});

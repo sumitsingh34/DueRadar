@@ -21,6 +21,8 @@ export interface ItemTemplate {
   autoRenew?: false;
   /** Warranties: the usual length in years. */
   warrantyYears?: number;
+  /** A document that doesn't expire, such as a birth certificate. */
+  noDate?: true;
 }
 
 const MONTHLY: Frequency = { unit: 'month', count: 1 };
@@ -155,6 +157,14 @@ export const TEMPLATES: readonly ItemTemplate[] = [
   { name: 'Health checkup', category: 'appointment', frequency: YEARLY, task: true },
   { name: 'Pet vaccination', category: 'appointment', frequency: YEARLY, task: true },
   { name: 'Haircut', category: 'appointment', frequency: MONTHLY, task: true },
+  // Documents: track the expiry date, and optionally keep a photo.
+  { name: 'Passport', category: 'document' },
+  { name: 'Visa', category: 'document' },
+  { name: 'Residence permit', category: 'document' },
+  { name: 'Work permit', category: 'document' },
+  { name: 'National ID card', category: 'document' },
+  { name: 'Birth certificate', category: 'document', noDate: true },
+  { name: 'Marriage certificate', category: 'document', noDate: true },
 ];
 
 /** Shown before the user types anything: a few from each kind of item. */
@@ -170,7 +180,7 @@ export const POPULAR_TEMPLATES: readonly ItemTemplate[] = [
   'Oil change',
   'AC service',
   "Driver's license",
-  'Dental checkup',
+  'Passport',
 ].map((name) => TEMPLATES.find((t) => t.name === name)!);
 
 /** The kind of schedule a template sets up. */

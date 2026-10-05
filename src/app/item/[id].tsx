@@ -11,7 +11,13 @@ import { ItemForm } from '@/components/item-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { getReceipt, setReceipt } from '@/db/attachments';
+import {
+  getReceipt,
+  loadDocumentPhotos,
+  saveDocumentPhotos,
+  setReceipt,
+  type DocumentPhoto,
+} from '@/db/attachments';
 import { onDataChanged } from '@/db/events';
 import {
   deleteItem,
@@ -43,6 +49,7 @@ interface Loaded {
   history: PricePoint[];
   completions: Completion[];
   receipt: PickedPhoto | null;
+  photos: DocumentPhoto[];
 }
 
 export default function EditItemScreen() {
@@ -59,15 +66,21 @@ export default function EditItemScreen() {
       let active = true;
       const load = async () => {
         const item = await getItem(db, Number(id));
-        const [history, completions, attachment] = item
-          ? await Promise.all([getPriceHistory(db, item.id), listCompletions(db, item.id), getReceipt(db, item.id)])
-          : [[], [], null];
+        const [history, completions, attachment, photos] = item
+          ? await Promise.all([
+              getPriceHistory(db, item.id),
+              listCompletions(db, item.id),
+              getReceipt(db, item.id),
+              getCategory(item.category).documentPhotos ? loadDocumentPhotos(db, item.id) : [],
+            ])
+          : [[], [], null, []];
         if (!active) return;
         setLoaded({
           item,
           history,
           completions,
           receipt: attachment ? { uri: attachmentUri(attachment.path), mimeType: attachment.mimeType } : null,
+          photos,
         });
       };
       const reload = () => {
@@ -83,7 +96,7 @@ export default function EditItemScreen() {
   );
 
   if (loaded === undefined) return <ThemedView style={styles.fill} />;
-  const { item, history, completions, receipt } = loaded;
+  const { item, history, completions, receipt, photos } = loaded;
 
   if (item === null) {
     return (
@@ -225,14 +238,22 @@ export default function EditItemScreen() {
         key={item.updatedAt}
         initial={item}
         initialReceipt={receipt}
+        initialPhotos={photos}
         submitLabel="Save changes"
-        onSubmit={async (input, receiptChange) => {
+        onSubmit={async (input, files) => {
           await updateItem(db, item.id, input);
-          if (receiptChange.changed) {
+          if (files.receiptChanged) {
             try {
-              await setReceipt(db, item.id, receiptChange.photo);
+              await setReceipt(db, item.id, files.receipt);
             } catch (error) {
               showMessage('Saved, but the receipt wasn’t', error instanceof Error ? error.message : String(error));
+            }
+          }
+          if (files.photosChanged) {
+            try {
+              await saveDocumentPhotos(db, item.id, files.photos);
+            } catch (error) {
+              showMessage('Saved, but the photos weren’t', error instanceof Error ? error.message : String(error));
             }
           }
           goBack();

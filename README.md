@@ -34,13 +34,11 @@ Working now:
 - Vehicles and homes: group items under your car or home, keep the odometer up to date, and see services due by distance. From a few readings, DueRadar estimates when a distance will be reached and reminds you before then
 - Life admin: licenses and certifications (with an issue date and "valid for" length), appointments with a time of day, rent and lease ends, and tax deadlines you mark as done each time. Past appointments move to their own list instead of showing as overdue
 - Reminders: notifications on the phone 30, 7 and 1 days before (configurable), at the time you choose. Any item can have its own reminders instead, such as 3 months before a lease ends. A reminder on the day of an appointment comes at least an hour before it. A reminder longer than the billing period is skipped
-- Backup: export a JSON backup (including receipt photos, vehicles and history) or a CSV spreadsheet, and restore from a backup on a new phone
+- Documents: passports, visas, ID cards and certificates, with their expiry date (or none, for a birth certificate) and reminders 6 months ahead. Adding photos of the document is optional; they're encrypted on the phone with AES-256 and a key kept in the phone's secure storage
+- App lock: ask for the fingerprint, face or phone PIN when DueRadar opens, and again after a minute away
+- Backup: export a JSON backup (including receipt photos, vehicles and history, and document photos if you choose) or a CSV spreadsheet, and restore from a backup on a new phone
 - Your currency for new items (USD, EUR, GBP, INR and more)
-- Light and dark mode. Runs on iOS, Android and the web (reminders need the phone app)
-
-Planned:
-
-- An optional encrypted document vault (V5)
+- Light and dark mode. Runs on iOS, Android and the web (reminders, photos and the app lock need the phone app)
 
 ## Tech stack
 
@@ -51,7 +49,9 @@ Planned:
 | Storage    | `expo-sqlite` on the device, with versioned migrations      |
 | Reminders  | `expo-notifications`, scheduled locally on the device       |
 | Backup     | `expo-file-system`, `expo-sharing`, `expo-document-picker`  |
-| Receipts   | `expo-image-picker` (camera or photo library), stored in the app's own folder |
+| Photos     | `expo-image-picker` (camera or photo library), stored in the app's own folder |
+| Documents  | `expo-crypto` (AES-256-GCM) with the key in `expo-secure-store`     |
+| App lock   | `expo-local-authentication` (fingerprint, face or the phone's PIN)  |
 | Tests      | Jest (`jest-expo`) for dates, money, reminders, templates, backups, search, price insights, tasks and distances |
 
 ## Project structure
@@ -62,12 +62,14 @@ src/
     (tabs)/       Overview, All items and Settings tabs
     item/         Add item (modal), Edit item and Mark as done screens
     asset/        Add or edit a vehicle or home, with its odometer and items
+  attachments/    Picking and storing photos, and encrypting document photos
   components/     UI building blocks (form controls, item row, date field)
   db/             SQLite migrations, queries, settings and backup restore
   domain/         Pure logic with no React or database: dates, money, schedules,
                   dashboard, reminder planning, templates, backup format
   hooks/          React hooks (theme, data loading)
   notifications/  Scheduling reminders (a no-op on the web)
+  security/       App lock (a no-op on the web)
   utils/          Dialogs, navigation, saving and opening files
 docs/             Website and privacy policy (GitHub Pages)
 fastlane/         Google Play listing text and graphics
@@ -85,7 +87,7 @@ Everything you track is an **item** with a key date. One shared table covers the
 | `completions`    | Each time a task was done or a renewal confirmed, with the cost, odometer reading and a note      |
 | `assets`         | Vehicles and homes that items can belong to, with a vehicle's odometer unit                       |
 | `usage_readings` | Odometer readings of each vehicle                                                                 |
-| `attachments`    | Receipt photos (and later, documents) stored in the app's private storage                        |
+| `attachments`    | Receipt photos, and document photos (encrypted), stored in the app's private storage              |
 | `settings`       | App preferences, such as the default currency                                                     |
 
 An item's schedule is one of:

@@ -165,3 +165,12 @@ describe('life admin wording', () => {
     expect(shortDueDate(toDueItem(makeItem({ dueDate: '2027-01-02' }), TODAY)!, TODAY)).toBe('Jan 2, 2027');
   });
 });
+
+describe('documents without an expiry date', () => {
+  it('are kept but never due', () => {
+    const certificate = makeItem({ category: 'document', scheduleType: 'expiry', intervalUnit: null, intervalCount: null, dueDate: null });
+    expect(toDueItem(certificate, TODAY)).toBeNull();
+    const summary = buildDashboard([certificate], TODAY);
+    expect(summary).toMatchObject({ activeCount: 1, upcoming: [], needsAttention: [] });
+  });
+});

@@ -78,14 +78,19 @@ export type ItemInput = Pick<
   | 'assetId'
 >;
 
-/** A file attached to an item, such as a receipt photo, stored in the app's own folder. */
+/**
+ * A file attached to an item, stored in the app's own folder: a receipt photo,
+ * or a photo of a document, which is kept encrypted.
+ */
 export interface Attachment {
   id: number;
   itemId: number;
-  kind: 'receipt';
+  kind: 'receipt' | 'document';
   /** Path relative to the app's document folder, e.g. "receipts/12-1730000000000.jpg". */
   path: string;
   mimeType: string | null;
+  /** Whether the file is encrypted with the vault key. */
+  encrypted: boolean;
   createdAt: string;
 }
 

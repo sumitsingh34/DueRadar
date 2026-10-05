@@ -20,6 +20,7 @@ describe('settingsFromRows', () => {
       remindersEnabled: false,
       reminderDays: [30, 7, 1],
       reminderHour: 20,
+      appLock: false,
     });
   });
 
@@ -56,5 +57,13 @@ describe('reminder days', () => {
     expect(normalizeReminderDays([])).toEqual([]);
     expect(normalizeReminderDays('30')).toBeNull();
     expect(normalizeReminderDays(null)).toBeNull();
+  });
+});
+
+describe('app lock setting', () => {
+  it('is off unless it was turned on', () => {
+    expect(DEFAULT_SETTINGS.appLock).toBe(false);
+    expect(settingsFromRows([{ key: 'appLock', value: 'true' }]).appLock).toBe(true);
+    expect(settingsFromRows([{ key: 'appLock', value: '"yes"' }]).appLock).toBe(false);
   });
 });

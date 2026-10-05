@@ -19,15 +19,18 @@ import type {
 /**
  * Format 2 added receipt photos. Format 3 added vehicles and homes, odometer
  * readings and task history. Format 4 added times of day and each item's own
- * reminders. Older backups are still accepted.
+ * reminders. Format 5 added document photos. Older backups are still accepted.
  */
-export const BACKUP_FORMAT = 4;
+export const BACKUP_FORMAT = 5;
 
-/** A receipt photo in a backup, with the file itself as base64. */
+/**
+ * A receipt or document photo in a backup, with the file itself as base64.
+ * Document photos are decrypted for the backup and encrypted again on restore.
+ */
 export interface BackupAttachment {
   itemId: number;
-  kind: 'receipt';
-  /** File name only. It is restored into the app's receipts folder. */
+  kind: 'receipt' | 'document';
+  /** File name only. It is restored into the app's receipts or vault folder. */
   fileName: string;
   mimeType: string | null;
   createdAt: string;
@@ -52,7 +55,7 @@ export type BackupContents = Omit<Backup, 'app' | 'format' | 'exportedAt'>;
 
 export class BackupError extends Error {}
 
-/** A plain file name: no folders, so a backup can never write outside the receipts folder. */
+/** A plain file name: no folders, so a backup can never write outside the app's photo folders. */
 const SAFE_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
@@ -130,26 +133,26 @@ export function parseBackup(text: string): Backup {
       note: optionalText(c.note),
     }));
 
-  // Receipts with an unsafe file name, bad data or a missing item are skipped.
-  const fileNames = new Set<string>();
+  // Photos with an unsafe file name, bad data or a missing item are skipped.
+  const files = new Set<string>();
   const attachments: BackupAttachment[] = [];
   for (const a of listOf(data.attachments)) {
     if (
       typeof a.itemId !== 'number' ||
       !ids.has(a.itemId) ||
-      a.kind !== 'receipt' ||
+      (a.kind !== 'receipt' && a.kind !== 'document') ||
       typeof a.fileName !== 'string' ||
       !SAFE_FILE_NAME.test(a.fileName) ||
-      fileNames.has(a.fileName) ||
+      files.has(`${a.kind}/${a.fileName}`) ||
       typeof a.data !== 'string' ||
       !BASE64.test(a.data)
     ) {
       continue;
     }
-    fileNames.add(a.fileName);
+    files.add(`${a.kind}/${a.fileName}`);
     attachments.push({
       itemId: a.itemId,
-      kind: 'receipt',
+      kind: a.kind,
       fileName: a.fileName,
       mimeType: typeof a.mimeType === 'string' ? a.mimeType : null,
       createdAt: typeof a.createdAt === 'string' ? a.createdAt : new Date().toISOString(),

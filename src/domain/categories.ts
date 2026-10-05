@@ -65,6 +65,10 @@ export interface Category {
   reminderDays?: Partial<Record<ScheduleType, readonly number[]>>;
   /** Whether items in this category can have a receipt photo. */
   receipts?: boolean;
+  /** Whether items in this category can have photos of the document, kept encrypted. */
+  documentPhotos?: boolean;
+  /** Whether a one-time item can have no date at all, like a birth certificate. */
+  dateOptional?: boolean;
   /** The vehicles or homes items in this category can belong to. */
   assets?: {
     kinds: readonly AssetKind[];
@@ -77,7 +81,7 @@ export interface Category {
 }
 
 /** Categories from later roadmap versions stay hidden until that version ships. */
-export const CURRENT_PHASE = 4;
+export const CURRENT_PHASE = 5;
 
 /** Category groups, in the order the form shows them. */
 export const CATEGORY_GROUPS: readonly { id: CategoryGroup; label: string }[] = [
@@ -221,6 +225,17 @@ export const CATEGORIES: readonly Category[] = [
     group: 'life',
     schedules: ['expiry'],
     color: '#6E56CF',
+    wording: {
+      startDate: 'Issue date',
+      provider: 'Issued by',
+      providerPlaceholder: 'Country or office',
+      length: 'Valid for',
+    },
+    lengthYears: [1, 5, 10],
+    // Many countries want a passport valid for 6 months beyond a trip.
+    reminderDays: { expiry: [180, 90, 30] },
+    documentPhotos: true,
+    dateOptional: true,
   },
   {
     id: 'other',

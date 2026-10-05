@@ -6,15 +6,31 @@ import {
   readAttachmentBase64,
   writeAttachmentBase64,
 } from '@/attachments/storage';
+import { encryptBase64 } from '@/attachments/vault';
 import { listAssets, listReadings } from '@/db/assets';
-import { listAttachments } from '@/db/attachments';
+import { listAttachments, readDocumentPhoto } from '@/db/attachments';
 import { emitDataChanged } from '@/db/events';
 import { listAllCompletions, listAllPriceHistory, listItems } from '@/db/items';
 import { getSettings, writeSettings } from '@/db/settings';
 import { createBackup, type Backup, type BackupAttachment } from '@/domain/backup';
 
-/** Everything, including receipt photos as base64. */
-export async function exportBackup(db: SQLiteDatabase): Promise<Backup> {
+/** How many document photos there are, to ask whether a backup should include them. */
+export async function countDocumentPhotos(db: SQLiteDatabase): Promise<number> {
+  const row = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) AS count FROM attachments WHERE kind = 'document'",
+  );
+  return row?.count ?? 0;
+}
+
+/**
+ * Everything, including receipt photos as base64, and document photos too if
+ * asked for. Those are decrypted, since the vault key stays on this phone.
+ * Photos that can't be read or decrypted are left out.
+ */
+export async function exportBackup(
+  db: SQLiteDatabase,
+  { includeDocuments }: { includeDocuments: boolean },
+): Promise<Backup> {
   const [items, priceHistory, settings, attachments, assets, readings, completions] = await Promise.all([
     listItems(db),
     listAllPriceHistory(db),
@@ -27,8 +43,17 @@ export async function exportBackup(db: SQLiteDatabase): Promise<Backup> {
 
   const files: BackupAttachment[] = [];
   for (const attachment of attachments) {
-    const data = await readAttachmentBase64(attachment.path);
-    if (data === null) continue; // The file is missing; nothing to back up.
+    if (attachment.kind === 'document' && !includeDocuments) continue;
+    let data: string | null = null;
+    try {
+      data =
+        attachment.kind === 'document'
+          ? await readDocumentPhoto(attachment)
+          : await readAttachmentBase64(attachment.path);
+    } catch (error) {
+      console.warn('Left a photo out of the backup', error);
+    }
+    if (data === null) continue; // The file is missing or can't be opened.
     files.push({
       itemId: attachment.itemId,
       kind: attachment.kind,
@@ -50,14 +75,22 @@ export async function exportBackup(db: SQLiteDatabase): Promise<Backup> {
 }
 
 /**
- * Replaces all data and settings with the backup's. Receipt files are written
- * first, the data is swapped in one transaction, and only then are old receipt
- * files removed, so a failure loses nothing.
+ * Replaces all data and settings with the backup's. Photo files are written
+ * first (document photos encrypted with this phone's key), the data is
+ * swapped in one transaction, and only then are old photo files removed, so a
+ * failure loses nothing.
  */
 export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise<void> {
-  const receipts = attachmentsSupported
-    ? backup.attachments.map((a) => ({ ...a, path: writeAttachmentBase64(a.fileName, a.data) }))
-    : [];
+  const photos: (BackupAttachment & { path: string; encrypted: boolean })[] = [];
+  if (attachmentsSupported) {
+    for (const file of backup.attachments) {
+      photos.push(
+        file.kind === 'document'
+          ? { ...file, encrypted: true, path: writeAttachmentBase64(file.fileName, await encryptBase64(file.data), 'vault') }
+          : { ...file, encrypted: false, path: writeAttachmentBase64(file.fileName, file.data) },
+      );
+    }
+  }
 
   await db.withTransactionAsync(async () => {
     // Deleting items also deletes their price history, history and attachments,
@@ -148,20 +181,21 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
       );
     }
 
-    for (const receipt of receipts) {
+    for (const photo of photos) {
       await db.runAsync(
-        'INSERT INTO attachments (item_id, kind, file_uri, file_name, mime_type, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        receipt.itemId,
-        receipt.kind,
-        receipt.path,
-        receipt.fileName,
-        receipt.mimeType,
-        receipt.createdAt,
+        'INSERT INTO attachments (item_id, kind, file_uri, file_name, mime_type, encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        photo.itemId,
+        photo.kind,
+        photo.path,
+        photo.fileName,
+        photo.mimeType,
+        photo.encrypted ? 1 : 0,
+        photo.createdAt,
       );
     }
 
     await writeSettings(db, backup.settings);
   });
-  deleteUnreferencedAttachmentFiles(new Set(receipts.map((r) => r.path)));
+  deleteUnreferencedAttachmentFiles(new Set(photos.map((p) => p.path)));
   emitDataChanged();
 }

@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 
-import { chooseReceiptPhoto, takeReceiptPhoto, type PickedPhoto } from '@/attachments/pick';
+import { choosePhoto, takePhoto, type PickedPhoto } from '@/attachments/pick';
 import { attachmentsSupported } from '@/attachments/storage';
 import { Button } from '@/components/form-controls';
-import { Icon } from '@/components/icon';
+import { PhotoViewer } from '@/components/photo-viewer';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -40,10 +39,10 @@ export function ReceiptField({
     return (
       <View style={styles.buttons}>
         <View style={styles.button}>
-          <Button title="Take photo" variant="secondary" onPress={() => pick(takeReceiptPhoto)} />
+          <Button title="Take photo" variant="secondary" onPress={() => pick(takePhoto)} />
         </View>
         <View style={styles.button}>
-          <Button title="Choose photo" variant="secondary" onPress={() => pick(chooseReceiptPhoto)} />
+          <Button title="Choose photo" variant="secondary" onPress={() => pick(choosePhoto)} />
         </View>
       </View>
     );
@@ -68,7 +67,7 @@ export function ReceiptField({
         </ThemedText>
         <View style={styles.buttons}>
           <View style={styles.button}>
-            <Button title="Replace" variant="secondary" onPress={() => pick(chooseReceiptPhoto)} />
+            <Button title="Replace" variant="secondary" onPress={() => pick(choosePhoto)} />
           </View>
           <View style={styles.button}>
             <Button title="Remove" variant="danger" onPress={() => onChange(null)} />
@@ -76,24 +75,13 @@ export function ReceiptField({
         </View>
       </View>
 
-      <Modal visible={viewing} animationType="fade" onRequestClose={() => setViewing(false)}>
-        <SafeAreaView style={styles.viewer}>
-          <Image
-            source={{ uri: value.uri }}
-            style={styles.full}
-            resizeMode="contain"
-            accessibilityLabel="Receipt"
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={8}
-            onPress={() => setViewing(false)}
-            style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
-            <Icon name="clear" color="#ffffff" size={32} />
-          </Pressable>
-        </SafeAreaView>
-      </Modal>
+      <PhotoViewer
+        uris={[value.uri]}
+        index={viewing ? 0 : null}
+        onIndexChange={() => {}}
+        onClose={() => setViewing(false)}
+        label="Receipt"
+      />
     </View>
   );
 }
@@ -120,18 +108,6 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  viewer: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  full: {
-    flex: 1,
-  },
-  close: {
-    position: 'absolute',
-    top: Spacing.five,
-    right: Spacing.three,
   },
   pressed: {
     opacity: 0.6,

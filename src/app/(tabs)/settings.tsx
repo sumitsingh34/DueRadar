@@ -2,14 +2,14 @@ import Constants from 'expo-constants';
 import { useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState, type ReactNode } from 'react';
-import { Linking, StyleSheet } from 'react-native';
+import { Linking, Platform, StyleSheet } from 'react-native';
 
 import { Button, ChipGroup, FormField, MultiChipGroup, SwitchRow } from '@/components/form-controls';
 import { Section, TabScreen } from '@/components/tab-screen';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { exportBackup, restoreBackup } from '@/db/backup';
+import { countDocumentPhotos, exportBackup, restoreBackup } from '@/db/backup';
 import { emitDataChanged } from '@/db/events';
 import { setCurrencyForAllItems } from '@/db/items';
 import { updateSettings } from '@/db/settings';
@@ -31,7 +31,8 @@ import {
   requestReminderPermission,
   type ReminderPermission,
 } from '@/notifications/reminders';
-import { confirmAsync, showMessage } from '@/utils/confirm';
+import { appLockSupported, authenticate, canUseAppLock } from '@/security/app-lock';
+import { chooseAsync, confirmAsync, showMessage } from '@/utils/confirm';
 import { pickTextFile, shareTextFile } from '@/utils/files';
 
 const REPO_URL = 'https://github.com/sumitsingh34/DueRadar';
@@ -47,8 +48,11 @@ export default function SettingsScreen() {
   const items = useItems();
   const assetData = useAssets();
   const [permission, setPermission] = useState<ReminderPermission | null>(null);
+  // Whether the phone has a screen lock to unlock DueRadar with.
+  const [lockAvailable, setLockAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Both can change in the phone's settings while the app is in the background.
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -57,6 +61,9 @@ export default function SettingsScreen() {
           if (active) setPermission(value);
         })
         .catch((error) => console.warn('Could not read notification permission', error));
+      canUseAppLock().then((value) => {
+        if (active) setLockAvailable(value);
+      });
       return () => {
         active = false;
       };
@@ -100,7 +107,22 @@ export default function SettingsScreen() {
 
   const exportJson = () =>
     run(async () => {
-      const backup = await exportBackup(db);
+      // Document photos are only in the backup if the user says so, since the file isn't encrypted.
+      const documentPhotos = await countDocumentPhotos(db);
+      let includeDocuments = false;
+      if (documentPhotos > 0) {
+        const answer = await chooseAsync(
+          'Include document photos?',
+          `The backup can include your ${plural(documentPhotos, 'document photo')}. In the backup file they aren’t encrypted, so anyone with the file can see them. Keep it somewhere safe.`,
+          [
+            { label: 'Leave out', value: false },
+            { label: 'Include', value: true },
+          ],
+        );
+        if (answer === null) return;
+        includeDocuments = answer;
+      }
+      const backup = await exportBackup(db, { includeDocuments });
       await shareTextFile(
         `dueradar-backup-${todayISO()}.json`,
         JSON.stringify(backup, null, 2),
@@ -128,6 +150,16 @@ export default function SettingsScreen() {
       }
       await restoreBackup(db, backup);
       showMessage('Backup restored', `${plural(backup.items.length, 'item')} restored.`);
+    });
+
+  // Turning the lock on or off needs the fingerprint, face or PIN first. Without a
+  // screen lock on the phone, the lock does nothing, so turning it off doesn't ask.
+  const toggleAppLock = (appLock: boolean) =>
+    run(async () => {
+      const confirmed =
+        (!appLock && lockAvailable === false) ||
+        (await authenticate(appLock ? 'Turn on the app lock' : 'Turn off the app lock'));
+      if (confirmed) await updateSettings(db, { appLock });
     });
 
   const otherCurrencyCount = items.filter((item) => item.currency !== settings.currency).length;
@@ -234,11 +266,34 @@ export default function SettingsScreen() {
         </Card>
       </Section>
 
+      <Section title="Security">
+        <Card>
+          <SwitchRow
+            label="App lock"
+            description="Ask for your fingerprint, face or phone PIN when you open DueRadar."
+            value={settings.appLock}
+            onValueChange={toggleAppLock}
+            disabled={busy || !appLockSupported || (lockAvailable === false && !settings.appLock)}
+          />
+          {!appLockSupported ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              The app lock is in the Android and iPhone app, not the web version.
+            </ThemedText>
+          ) : lockAvailable === false ? (
+            <ThemedText type="small" themeColor="warning">
+              Set up a screen lock in your phone’s settings to use this.
+              {settings.appLock ? ' Until then, DueRadar opens without asking.' : ''}
+            </ThemedText>
+          ) : null}
+        </Card>
+      </Section>
+
       <Section title="Backup">
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            Everything is stored only on this device. Export a backup to keep a copy, for example
-            in Google Drive or email, or to move to a new phone.
+            Everything is stored only on this device
+            {Platform.OS === 'android' ? ', and Android’s own backup doesn’t include it' : ''}. Export
+            a backup to keep a copy, for example in Google Drive or email, or to move to a new phone.
           </ThemedText>
           <Button title="Export backup (.json)" onPress={exportJson} disabled={busy} />
           <Button

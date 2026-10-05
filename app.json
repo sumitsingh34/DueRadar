@@ -48,9 +48,16 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "DueRadar uses your photos when you choose a picture of a receipt.",
-          "cameraPermission": "DueRadar uses the camera when you take a photo of a receipt.",
+          "photosPermission": "DueRadar uses your photos when you choose a picture of a receipt or document.",
+          "cameraPermission": "DueRadar uses the camera when you take a photo of a receipt or document.",
           "microphonePermission": false
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "DueRadar uses Face ID to unlock the app when the app lock is on."
         }
       ]
     ],
