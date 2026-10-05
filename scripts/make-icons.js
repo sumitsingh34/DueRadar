@@ -99,10 +99,12 @@ const roundedIcon = svg(
       <text x="463" y="345" font-size="40" fill-opacity="0.92">before it's due.</text>
     </g>
   </svg>`;
-  await sharp(Buffer.from(banner))
+  const featureGraphic = await sharp(Buffer.from(banner))
     .composite([{ input: radar, left: 75, top: 85 }])
     .png()
-    .toFile(path.join(storeDir, 'featureGraphic.png'));
+    .toBuffer();
+  // Play takes a feature graphic only as a JPEG or a PNG without an alpha channel.
+  await sharp(featureGraphic).removeAlpha().png().toFile(path.join(storeDir, 'featureGraphic.png'));
 
   // Previews for checking: a launcher-style circle mask and the rounded icon.
   fs.mkdirSync(previewDir, { recursive: true });

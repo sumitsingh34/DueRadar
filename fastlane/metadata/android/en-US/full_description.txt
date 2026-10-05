@@ -3,7 +3,7 @@ DueRadar shows everything you pay for again and again, and reminds you before it
 Add your subscriptions, memberships, insurance, phone and internet plans, domains and card annual fees. DueRadar adds up what they cost each month and each year, shows what's coming up in the next 30 days, and sends a reminder before each renewal.
 
 WHAT YOU GET
-• Monthly and yearly totals at a glance
+• Monthly and yearly totals at a glance, and what each category costs
 • Reminders 30, 7 or 1 day before a due date, at the time you choose
 • Price history for every item, and a heads-up when a price goes up
 • Warranties: purchase date, store, price and a photo of the receipt, with a reminder before the warranty ends
